@@ -18,7 +18,7 @@ from gevent import monkey
 from proxies_pool import proxy_list
 from user_agent_pool import user_agents    
 
-GITHUB_TOKEN = ''
+GITHUB_TOKEN = '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'
 
 def get_response(request_url, params=None, return_text=False):
     MAX_RETRIES = 10
@@ -190,7 +190,7 @@ def get_changes(lang, repo_num):
         print(f'==> In repo {title}')
         user_name, proj_name = re.match('(.+)/(.+)', title).groups()
 
-        commit_d = get_all_response("https://api.github.com/repos/{}/{}/commits".format(user_name, proj_name))
+        commit_d = get_small_response("https://api.github.com/repos/{}/{}/commits".format(user_name, proj_name))
         print(f'==> Get {str(len(commit_d))} commit history')
 
         for _, item in enumerate(commit_d): # for every commit version
