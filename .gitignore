@@ -1,5 +1,6 @@
 /__pycache__
-/changes
-/dataset
-/repo_info
-/repos
+/changes/
+/dataset/
+/repo_info/
+/repos/
+.gitignore
