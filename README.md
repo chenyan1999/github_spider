@@ -2,7 +2,7 @@
 
 ## How to use
 
-1. 登陆 https://github.com/settings/tokens，创建个人 token
+1. 登陆 [Github token 设置](https://github.com/settings/tokens)，创建个人 token
 
 2. 修改 main.py 参数：
 
@@ -14,9 +14,9 @@
 3. 将个人 token 复制到 get_changes.py 第 21 行：GITHUB_TOKEN = ‘’ 
 4. 运行程序
 
-* ```
+ ```
     python main.py
-    ```
+ ```
 
 ## 实现细节
 
@@ -42,6 +42,4 @@
 ```
 
 3. 数据保存在 ./dataset 中
-
-4. 形成数据样本时如不需要下载历史版本代码库，可以注释掉 get_code.py 的47～50 行
 4. 当超出 GitHub 允许的一小时请求次数时，r.status_code == 403，此时程序 sleep 一小时 
