@@ -54,6 +54,8 @@ def git_clone_file(user_name, proj_name, sha, file_path):
         f.write(d)
 
 def get_datasample(lang, download_files_when_generate_datasamples=False, only_download_changed_files=False):
+    if not os.path.exists('./dataset'):
+        os.mkdir('./dataset')
     samples = []
     for file_name in os.listdir(f"./changes/{lang}"):  
         if file_name.startswith('.'):  # ignore any hidden file

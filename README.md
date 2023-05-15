@@ -2,7 +2,7 @@
 
 ## How to use
 
-1. 登陆 [Github token 设置](https://github.com/settings/tokens)，创建个人 token
+1. 登陆 [Github token 设置](https://github.com/settings/tokens)，创建个人 token 
 
 2. 修改 main.py 参数：
 
