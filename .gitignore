@@ -3,4 +3,8 @@
 /dataset/
 /repo_info/
 /repos/
+!changes/.gitkeep
+!dataset/.gitkeep
+!repo_info/.gitkeep
+!repos/.gitkeep
 .gitignore
