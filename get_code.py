@@ -56,14 +56,14 @@ def git_clone_file(user_name, proj_name, sha, file_path):
 def get_datasample(lang, download_files_when_generate_datasamples=False, only_download_changed_files=False):
     if not os.path.exists('./dataset'):
         os.mkdir('./dataset')
-    samples = []
-    for file_name in os.listdir(f"./changes/{lang}"):  
+    for file_name in os.listdir(f"./changes/{lang}"):   # for every change recorded in jsonl
+        samples = []
         if file_name.startswith('.'):  # ignore any hidden file
             continue
         user_name, proj_name, sha, old_sha = file_name.split('.')[0].split('_')
         
         print(f'==> Converting {user_name}/{proj_name}\'s commit {sha} into data samples')
-        # download repo
+        # download the entire repo if required
         if download_files_when_generate_datasamples and only_download_changed_files == False:
             git_clone_whole(user_name, proj_name, sha)
             git_clone_whole(user_name, proj_name, old_sha)
@@ -91,5 +91,7 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
             }
             samples.append(dic)
 
-    with jsonlines.open(f"./dataset/{lang}_dataset.jsonl", 'w') as writer:
-        writer.write_all(samples)
+        with jsonlines.open(f"./dataset/{lang}_dataset.jsonl", 'a') as writer:
+            writer.write_all(samples)
+        # delete the changes file when done
+        os.remove(f'./changes/{lang}/{file_name}')

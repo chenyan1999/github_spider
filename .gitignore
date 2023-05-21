@@ -3,5 +3,6 @@
 /dataset/
 /repo_info/
 /repos/
+/commit_history/
 .gitignore
 test.py

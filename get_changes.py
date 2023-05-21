@@ -124,8 +124,11 @@ def extract_patch(patch):
         if len(window) == 0:
             continue
         window = "@@ -" + window
-        old_window_start_line = int(re.findall(r"@@ \-(.+?)[,|\s]", window)[0]) # get the start line index of this window's old version
-        new_window_start_line = int(re.findall(r"\+(.+?)[,|\s]", window)[0]) # get the start line index of this window's new version
+        try:
+            old_window_start_line = int(re.findall(r"@@ \-(.+?)[,|\s]", window)[0]) # get the start line index of this window's old version
+            new_window_start_line = int(re.findall(r"\+(.+?)[,|\s]", window)[0]) # get the start line index of this window's new version
+        except:
+            raise Exception("Cannot find start line index")
         lines = window.split("\n")
         func_name = lines[0].split("@@")[-1].strip(' ')
         change_item = {
@@ -165,6 +168,7 @@ def extract_patch(patch):
     return change_rec
 
 def get_changes(lang, repo_num):
+    # ---------------------- Get the top star repo's name ----------------------
     if not os.path.exists("./repo_info"):
         os.mkdir("./repo_info")
     print("==> Starting to get repos of %s ..." % lang)
@@ -182,9 +186,13 @@ def get_changes(lang, repo_num):
         # save repo info
         with jsonlines.open(f"./repo_info/{lang}_top_star_repos.jsonl", 'w') as writer:
             writer.write_all(repos)
-    
     print(f"==> Get {str(len(repos[:repo_num]))} repos of {lang}")
+
+    # ---------------------- Get the commit history of each repo ----------------------
+    if not os.path.exists("./commit_history"):
+        os.mkdir("./commit_history")
     for repo in repos[:repo_num]:
+        # skip repo if the commits of this repo has been processed
         if 'have_recorded_changes' in repo.keys() and repo['have_recorded_changes']:
             print(f'==> Repo {repo["full_name"]} commit changes has been recorded')
             continue
@@ -192,7 +200,17 @@ def get_changes(lang, repo_num):
         print(f'==> In repo {title}')
         user_name, proj_name = re.match('(.+)/(.+)', title).groups()
 
-        commit_d = get_all_response("https://api.github.com/repos/{}/{}/commits".format(user_name, proj_name))
+        # skip scrawling if the commit history of this repo has been recorded
+        if not os.path.exists(f"./commit_history/{user_name}_{proj_name}.jsonl"):
+            print("==> Feching commit history from GitHub...")
+            commit_d = get_all_response("https://api.github.com/repos/{}/{}/commits".format(user_name, proj_name))
+            # save commit history
+            with jsonlines.open(f"./commit_history/{user_name}_{proj_name}.jsonl", 'w') as writer:
+                writer.write_all(commit_d)
+        else:
+            print("==> Fecthing commit history from local...")
+            with jsonlines.open(f"./commit_history/{user_name}_{proj_name}.jsonl") as reader:
+                commit_d = list(reader)
         print(f'==> Get {str(len(commit_d))} commit history')
 
         for _, item in enumerate(commit_d): # for every commit version
@@ -229,9 +247,13 @@ def get_changes(lang, repo_num):
                     continue
                 file_name_w_path = file["filename"]
                 # identify delted and added lines
-                for item in extract_patch(patch):
-                    item['file_path'] = file_name_w_path # the file name with path
-                    change_records.append(item)
+                try:   # if the patch is not valid, we ignore it
+                    for item in extract_patch(patch):
+                        item['file_path'] = file_name_w_path # the file name with path
+                        change_records.append(item)
+                except:
+                    print(f'==> Patch extraction failed in {sha}, {file_name_w_path}, ignored')
+                    continue
             if not os.path.exists(f"./changes/{lang}"):
                 os.makedirs(f"./changes/{lang}")
             with jsonlines.open(f"./changes/{lang}/{user_name}_{proj_name}_{sha}_{parent_sha}.jsonl", 'w') as writer:
