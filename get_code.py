@@ -25,7 +25,7 @@ def git_clone_whole(user_name, proj_name, sha):
     url = f'https://api.github.com/repos/{user_name}/{proj_name}/zipball/{sha}'
     zipfile_name = os.path.join('./repos', f'{user_name}_{proj_name}_{sha}.zip')
     try:
-        data = urllib.request.urlopen(url)
+        data = urllib.request.urlopen(url, timeout=40)
         with open(zipfile_name, 'wb') as f:
             f.write(data.read())
     except Exception as e:
@@ -50,7 +50,7 @@ def git_clone_file(user_name, proj_name, sha, file_path):
     file_path_wo_name = '/'.join(file_path.split('/')[:-1])
     if not os.path.exists(f'./repos/{user_name}_{proj_name}_{sha}/{file_path_wo_name}'):
         os.makedirs(f'./repos/{user_name}_{proj_name}_{sha}/{file_path_wo_name}', exist_ok=True)
-    with open(f'./repos/{user_name}_{proj_name}_{sha}/{file_path}', 'w') as f:
+    with open(f'./repos/{user_name}_{proj_name}_{sha}/{file_path}', 'w', encoding="utf-8") as f:
         f.write(d)
 
 def get_datasample(lang, download_files_when_generate_datasamples=False, only_download_changed_files=False):
@@ -81,15 +81,18 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
 
         # write a data sample for each file
         for file in file_changes:
-            if download_files_when_generate_datasamples and only_download_changed_files == True:
-                git_clone_file(user_name, proj_name, sha, file)
-                git_clone_file(user_name, proj_name, old_sha, file)
-            dic = {
-                'old_file_path': f'./repos/{user_name}_{proj_name}_{old_sha}/' + file,
-                'new_file_path': f'./repos/{user_name}_{proj_name}_{sha}/' + file,
-                'changes': file_changes[file]
-            }
-            samples.append(dic)
+            try:
+                if download_files_when_generate_datasamples and only_download_changed_files == True:
+                    git_clone_file(user_name, proj_name, sha, file)
+                    git_clone_file(user_name, proj_name, old_sha, file)
+                dic = {
+                    'old_file_path': f'./repos/{user_name}_{proj_name}_{old_sha}/' + file,
+                    'new_file_path': f'./repos/{user_name}_{proj_name}_{sha}/' + file,
+                    'changes': file_changes[file]
+                }
+                samples.append(dic)
+            except:
+                continue
 
         with jsonlines.open(f"./dataset/{lang}_dataset.jsonl", 'a') as writer:
             writer.write_all(samples)
