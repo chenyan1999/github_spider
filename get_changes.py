@@ -42,7 +42,7 @@ def get_response(request_url, params=None, return_text=False):
             else: # other errors, sleep for 1 second
                 time.sleep(1)
             if i == MAX_RETRIES - 1: # if all retries failed, raise error
-                raise ConnectionError(f"Cannot connect to website, status code: {r.status_code}")
+                raise ConnectionError(f"Cannot connect to website: {request_url}, status code: {r.status_code}")
     if return_text:
         return r.text
     else:
