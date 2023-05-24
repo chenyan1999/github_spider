@@ -60,7 +60,10 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
         samples = []
         if file_name.startswith('.'):  # ignore any hidden file
             continue
-        user_name, proj_name, sha, old_sha = file_name.split('.')[0].split('_')
+        try: # if this file don't have the correct format, ignore it
+            user_name, proj_name, sha, old_sha = file_name.split('.')[0].split('_')
+        except:
+            continue
         
         print(f'==> Converting {user_name}/{proj_name}\'s commit {sha} into data samples')
         # download the entire repo if required
