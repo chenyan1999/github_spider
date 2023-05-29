@@ -203,7 +203,7 @@ def get_changes(lang, repo_num):
         # skip scrawling if the commit history of this repo has been recorded
         if not os.path.exists(f"./commit_history/{user_name}_{proj_name}.jsonl"):
             print("==> Feching commit history from GitHub...")
-            commit_d = get_all_response("https://api.github.com/repos/{}/{}/commits".format(user_name, proj_name))
+            commit_d = get_all_response(f"https://api.github.com/repos/{user_name}/{proj_name}/commits")
             # save commit history
             with jsonlines.open(f"./commit_history/{user_name}_{proj_name}.jsonl", 'w') as writer:
                 writer.write_all(commit_d)

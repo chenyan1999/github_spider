@@ -67,6 +67,31 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
             old_sha = l[-1]
             proj_name = '_'.join(l[1:-2]) # in case that the project name contain _
         
+        # get commit message and html url
+        with jsonlines.open(f"./commit_history/{user_name}_{proj_name}.jsonl") as reader:
+            commits = list(reader)
+        for commit in commits:
+            if commit["sha"] == sha:
+                html_url = commit["html_url"]
+                try:
+                    commit_msg = commit["commit"]["message"]
+                except:
+                    commit_msg = ""
+                break # quit loop once find
+
+        # get pull message
+        try:
+            url = f'https://api.github.com/repos/{user_name}/{proj_name}/commits/{sha}/pulls'
+            content = get_response(url)
+            pull_info = json.loads(content)
+            if len(pull_info) != 1:
+                pull_msg = ""
+            else:
+                pull_info = pull_info[0]
+                pull_msg = pull_info["body"]
+        except:
+            pull_msg = ""
+
         print(f'==> Converting {user_name}/{proj_name}\'s commit {sha} into data samples')
         # download the entire repo if required
         try: # if failed to download the whole repo, skip conversion
@@ -84,9 +109,11 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
         # aggregate changes that happens on the same file
         file_changes = {}
         for change in changes:
-            if change['file_path'] not in file_changes:
-                file_changes[change['file_path']] = []
-            file_changes[change['file_path']].append(change)
+            file_path = change['file_path']
+            if file_path not in file_changes:
+                file_changes[file_path] = []
+            change.pop('file_path')
+            file_changes[file_path].append(change)
 
         # write a data sample for each file
         for file in file_changes:
@@ -97,11 +124,13 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
                 dic = {
                     'old_file_path': f'./repos/{user_name}_{proj_name}_{old_sha}/' + file,
                     'new_file_path': f'./repos/{user_name}_{proj_name}_{sha}/' + file,
-                    'changes': file_changes[file]
+                    'changes': file_changes[file],
+                    'commit_msg': commit_msg,
+                    'pull_msg': pull_msg,
+                    'html_url': html_url
                 }
                 samples.append(dic)
             except:
-                os.remove(f'./changes/{lang}/{file_name}')
                 continue
 
         with jsonlines.open(f"./dataset/{lang}_dataset.jsonl", 'a') as writer:
