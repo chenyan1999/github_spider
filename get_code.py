@@ -28,10 +28,8 @@ def git_clone_whole(user_name, proj_name, sha):
         data = urllib.request.urlopen(url, timeout=40)
         with open(zipfile_name, 'wb') as f:
             f.write(data.read())
-    except Exception as e:
-        print("==> Downloading %s failed" % zipfile_name)
-        print(e)
-        return
+    except:
+        raise Exception(f"==> Downloading {zipfile_name} failed")
 
     print("==> Extracting %s" % zipfile_name)
     with zipfile.ZipFile(zipfile_name, 'r') as f:
@@ -58,18 +56,26 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
         os.mkdir('./dataset')
     for file_name in os.listdir(f"./changes/{lang}"):   # for every change recorded in jsonl
         samples = []
-        if file_name.startswith('.'):  # ignore any hidden file
+        if file_name.startswith('.') or file_name[-6:] != '.jsonl':  # ignore any hidden file or files not jsonl
             continue
-        try: # if this file don't have the correct format, ignore it
-            user_name, proj_name, sha, old_sha = file_name.split('.')[0].split('_')
-        except:
+        l = file_name[:-6].split('_')
+        if len(l) < 4: # if this file don't have the correct format, ignore it
             continue
+        else:
+            user_name = l[0]
+            sha = l[-2]
+            old_sha = l[-1]
+            proj_name = '_'.join(l[1:-2]) # in case that the project name contain _
         
         print(f'==> Converting {user_name}/{proj_name}\'s commit {sha} into data samples')
         # download the entire repo if required
-        if download_files_when_generate_datasamples and only_download_changed_files == False:
-            git_clone_whole(user_name, proj_name, sha)
-            git_clone_whole(user_name, proj_name, old_sha)
+        try: # if failed to download the whole repo, skip conversion
+            if download_files_when_generate_datasamples and only_download_changed_files == False:
+                git_clone_whole(user_name, proj_name, sha)
+                git_clone_whole(user_name, proj_name, old_sha)
+        except:
+            os.remove(f'./changes/{lang}/{file_name}') 
+            continue
         
         # open jsonl file and convert to list
         with jsonlines.open(f'./changes/{lang}/{file_name}') as reader:
@@ -95,6 +101,7 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
                 }
                 samples.append(dic)
             except:
+                os.remove(f'./changes/{lang}/{file_name}')
                 continue
 
         with jsonlines.open(f"./dataset/{lang}_dataset.jsonl", 'a') as writer:
