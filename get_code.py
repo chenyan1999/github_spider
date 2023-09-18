@@ -1,18 +1,9 @@
-import gc
-import json
-import random
-import re
-import urllib.request
-import zipfile
-import codecs
-import requests
 import os
-import time
-import shutil
+import sys
+import json
+import zipfile
 import jsonlines
-
-from gevent.pool import Pool
-from gevent import monkey
+import urllib.request
 
 from proxies_pool import proxy_list
 from user_agent_pool import user_agents
@@ -20,6 +11,9 @@ from user_agent_pool import user_agents
 from get_changes import get_response
 
 def git_clone_whole(user_name, proj_name, sha):
+    '''
+    Download the whole repo
+    '''
     if os.path.exists(f'./repos/{user_name}_{proj_name}_{sha}/.whole_repo'):
         return # if this repo has been downloaded fully in the past
     url = f'https://api.github.com/repos/{user_name}/{proj_name}/zipball/{sha}'
@@ -40,6 +34,9 @@ def git_clone_whole(user_name, proj_name, sha):
     open(f'./repos/{user_name}_{proj_name}_{sha}/.whole_repo',"w+").close() # make a mark if the whole repo has been downloaded
 
 def git_clone_file(user_name, proj_name, sha, file_path):
+    '''
+    Only download the specified file
+    '''
     if os.path.exists(f'./repos/{user_name}_{proj_name}_{sha}/{file_path}'):
         return
     url = f'https://raw.githubusercontent.com/{user_name}/{proj_name}/{sha}/{file_path}'
@@ -76,6 +73,7 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
                 try:
                     commit_msg = commit["commit"]["message"]
                 except:
+                    print(f"Failed to find commit message from {user_name}\'s {proj_name} of commit {sha}")
                     commit_msg = ""
                 break # quit loop once find
 
@@ -90,6 +88,8 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
                 pull_info = pull_info[0]
                 pull_msg = pull_info["body"]
         except:
+            # Normal if a commit do not have pull msg, do not raise error
+            print(f"==> {user_name}\'s {proj_name} of commit {sha} do not find pull msg")
             pull_msg = ""
 
         print(f'==> Converting {user_name}/{proj_name}\'s commit {sha} into data samples')
@@ -99,6 +99,7 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
                 git_clone_whole(user_name, proj_name, sha)
                 git_clone_whole(user_name, proj_name, old_sha)
         except:
+            print('==> Failed to clone the whole repo of specific commit')
             os.remove(f'./changes/{lang}/{file_name}') 
             continue
         
@@ -130,7 +131,10 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
                     'html_url': html_url
                 }
                 samples.append(dic)
+            except Exception as e:
+                raise Exception(e)
             except:
+                print(f'==> Failed to convert {user_name}/{proj_name}\'s commit {sha} into data samples')
                 continue
 
         with jsonlines.open(f"./dataset/{lang}_dataset.jsonl", 'a') as writer:

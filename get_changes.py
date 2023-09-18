@@ -1,19 +1,10 @@
-import gc
-import json
-import random
-import re
-import urllib.request
-import zipfile
-import codecs
-import requests
 import os
+import re
+import json
 import time
-import shutil
+import random
+import requests
 import jsonlines
-
-from gevent.pool import Pool
-from gevent import monkey
-# monkey.patch_all()
 
 from proxies_pool import proxy_list
 from user_agent_pool import user_agents    
@@ -31,8 +22,14 @@ def get_response(request_url, params=None, return_text=False):
     }
     for i in range(MAX_RETRIES):
         proxy = random.choice(proxy_list)
-        r = requests.get(request_url, params, headers=headers,
+        try:
+            r = requests.get(request_url, params, headers=headers,
                             proxies={"http": proxy}, timeout=40)
+        except requests.exceptions.RequestException as e:
+            if i < MAX_RETRIES - 1:
+                continue
+            raise Exception(e)
+
         if r.status_code == 200:
             break # if successfully get response, break the loop and return content
         else:
@@ -223,7 +220,7 @@ def get_changes(lang, repo_num):
             parent_sha = item["parents"][0]["sha"]
             if os.path.exists(f"./changes/{lang}/{user_name}_{proj_name}_{sha}_{parent_sha}.jsonl"):
                 continue  # if this commit has been transformed into changes jsonl, we ignore it
-            print(f'==> Record changes in {sha}')
+            print(f'==> Record {proj_name} changes in {sha}')
             request_url = "https://api.github.com/repos/{}/{}/commits/{}".format(user_name, proj_name,item["sha"])
             params = {
                 "per_page": '100',

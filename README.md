@@ -14,7 +14,7 @@
 * download_files_when_generate_datasamples: 生成数据样本的同时下载对应代码文件
 * only_download_changed_files: 只下载对应文件而非整个 repo
 
-3. 将个人 token 复制到 get_changes.py 第 21 行：
+3. 将个人 token 复制到 get_changes.py 第 12 行：
     ```
     GITHUB_TOKEN = ‘’ 
     ```
