@@ -15,6 +15,7 @@ GITHUB_TOKENS_RST_TIME = [time.time()-3600 for _ in range(len(GITHUB_TOKENS))]
 
 def get_response(request_url, params=None, return_text=False):
     MAX_RETRIES = 10
+    global CURR_TOKEN_IDX
     headers = {
         'User-Agent': random.choice(user_agents),
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
