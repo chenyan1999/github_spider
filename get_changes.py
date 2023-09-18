@@ -9,14 +9,16 @@ import jsonlines
 from proxies_pool import proxy_list
 from user_agent_pool import user_agents    
 
-GITHUB_TOKEN = ''
+GITHUB_TOKENS = ['']
+CURR_TOKEN_IDX = 0
+GITHUB_TOKENS_RST_TIME = [time.time()-3600 for _ in range(len(GITHUB_TOKENS))]
 
 def get_response(request_url, params=None, return_text=False):
     MAX_RETRIES = 10
     headers = {
         'User-Agent': random.choice(user_agents),
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Authorization':'token '+ GITHUB_TOKEN,
+        'Authorization':'token '+ GITHUB_TOKENS[CURR_TOKEN_IDX],
         'Accept-Encoding': 'gzip,deflate,sdch',
         'Accept-Language': 'zh-CN,zh;q=0.8'
     }
@@ -35,7 +37,12 @@ def get_response(request_url, params=None, return_text=False):
         else:
             if r.status_code == 403: # if the request budget has been used up, sleep for 1 hour
                 print("==> 403 Forbidden, the request budget has been used up")
-                time.sleep(3600)
+                print("==> Switch to another token")
+                GITHUB_TOKENS_RST_TIME[CURR_TOKEN_IDX] = time.time()
+                CURR_TOKEN_IDX = (CURR_TOKEN_IDX + 1) % len(GITHUB_TOKENS)
+                if GITHUB_TOKENS_RST_TIME[CURR_TOKEN_IDX] + 3600 > time.time():
+                    print("==> All tokens have been used up, sleep until next token is available")
+                    time.sleep(3600-(time.time()-GITHUB_TOKENS_RST_TIME[CURR_TOKEN_IDX])+10)
             else: # other errors, sleep for 1 second
                 time.sleep(1)
             if i == MAX_RETRIES - 1: # if all retries failed, raise error
