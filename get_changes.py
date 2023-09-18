@@ -90,7 +90,7 @@ def get_repos(lang, repo_num):
     for page_idx in range(1, repo_num // 100 + 2):
         request_url = "https://api.github.com/search/repositories"
         params = {
-            "q": "language:{}".format(lang),
+            "q": "language:{} stars:>500".format(lang),
             "page": "{}".format(str(page_idx)),
             "per_page": "100",
             "sort": "stars",
@@ -112,6 +112,8 @@ def get_repos(lang, repo_num):
             repos.append(item)
             if len(repos) >= repo_num:
                 break
+    if len(repos) == 0:
+        raise Exception("No repos found")
     return repos
 
 def extract_patch(patch):
@@ -175,6 +177,7 @@ def get_changes(lang, repo_num):
     if os.path.exists(f"./repo_info/{lang}_top_star_repos.jsonl"):    # if have recorded repos before
         # open recored repo info
         with jsonlines.open(f"./repo_info/{lang}_top_star_repos.jsonl") as reader:
+            print(f"==> {lang}_top_star_repos.jsonl exists, read from local")
             repos = list(reader)
         if len(repos) < repo_num: # if the number of repo has not been satisfied
             repos = get_repos(lang, repo_num) # get the desired number of repos

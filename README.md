@@ -1,7 +1,10 @@
 # README
 
 ## How to use
-
+0. install dependency 
+    ```
+    pip install gevent
+    ```
 1. 登陆 [Github token 设置](https://github.com/settings/tokens)，创建个人 token 
 
 2. 修改 main.py 参数：
@@ -11,12 +14,15 @@
 * download_files_when_generate_datasamples: 生成数据样本的同时下载对应代码文件
 * only_download_changed_files: 只下载对应文件而非整个 repo
 
-3. 将个人 token 复制到 get_changes.py 第 21 行：GITHUB_TOKEN = ‘’ 
+3. 将个人 token 复制到 get_changes.py 第 21 行：
+    ```
+    GITHUB_TOKEN = ‘’ 
+    ```
 4. 运行程序
 
- ```
-    python main.py
- ```
+    ```
+        python main.py
+    ```
 
 ## 实现细节
 
