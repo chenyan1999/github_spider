@@ -132,10 +132,11 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
                 }
                 samples.append(dic)
             except Exception as e:
-                raise Exception(e)
-            except:
-                print(f'==> Failed to convert {user_name}/{proj_name}\'s commit {sha} into data samples')
-                continue
+                if isinstance(e, ConnectionError):
+                    print(f'==> Failed to convert {user_name}/{proj_name}\'s commit {sha} into data samples')
+                    continue
+                else:
+                    raise Exception(e)        
 
         with jsonlines.open(f"./dataset/{lang}_dataset.jsonl", 'a') as writer:
             writer.write_all(samples)
