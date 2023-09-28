@@ -14,10 +14,11 @@ def git_clone_whole(user_name, proj_name, sha):
     '''
     Download the whole repo
     '''
-    if os.path.exists(f'./repos/{user_name}_{proj_name}_{sha}/.whole_repo'):
+    global ROOT_PATH
+    if os.path.exists(ROOT_PATH+f'/repos/{user_name}_{proj_name}_{sha}/.whole_repo'):
         return # if this repo has been downloaded fully in the past
     url = f'https://api.github.com/repos/{user_name}/{proj_name}/zipball/{sha}'
-    zipfile_name = os.path.join('./repos', f'{user_name}_{proj_name}_{sha}.zip')
+    zipfile_name = os.path.join(ROOT_PATH+f'/repos', f'{user_name}_{proj_name}_{sha}.zip')
     try:
         data = urllib.request.urlopen(url, timeout=40)
         with open(zipfile_name, 'wb') as f:
@@ -27,31 +28,33 @@ def git_clone_whole(user_name, proj_name, sha):
 
     print("==> Extracting %s" % zipfile_name)
     with zipfile.ZipFile(zipfile_name, 'r') as f:
-        f.extractall('./repos')
+        f.extractall(ROOT_PATH+'/repos')
     # github's zip file name only presive 7 digits of sha
-    os.rename(f'./repos/{user_name}-{proj_name}-{sha[:7]}',f'./repos/{user_name}_{proj_name}_{sha}')
+    os.rename(ROOT_PATH+f'/repos/{user_name}-{proj_name}-{sha[:7]}',ROOT_PATH+f'/repos/{user_name}_{proj_name}_{sha}')
     os.remove(zipfile_name)
-    open(f'./repos/{user_name}_{proj_name}_{sha}/.whole_repo',"w+").close() # make a mark if the whole repo has been downloaded
+    open(ROOT_PATH+f'/repos/{user_name}_{proj_name}_{sha}/.whole_repo',"w+").close() # make a mark if the whole repo has been downloaded
 
 def git_clone_file(user_name, proj_name, sha, file_path):
     '''
     Only download the specified file
     '''
-    if os.path.exists(f'./repos/{user_name}_{proj_name}_{sha}/{file_path}'):
+    global ROOT_PATH
+    if os.path.exists(ROOT_PATH+f'/repos/{user_name}_{proj_name}_{sha}/{file_path}'):
         return
     url = f'https://raw.githubusercontent.com/{user_name}/{proj_name}/{sha}/{file_path}'
     d = get_response(url, return_text=True) # get the file
     # save it to the path
     file_path_wo_name = '/'.join(file_path.split('/')[:-1])
-    if not os.path.exists(f'./repos/{user_name}_{proj_name}_{sha}/{file_path_wo_name}'):
-        os.makedirs(f'./repos/{user_name}_{proj_name}_{sha}/{file_path_wo_name}', exist_ok=True)
-    with open(f'./repos/{user_name}_{proj_name}_{sha}/{file_path}', 'w', encoding="utf-8") as f:
+    if not os.path.exists(ROOT_PATH+f'/repos/{user_name}_{proj_name}_{sha}/{file_path_wo_name}'):
+        os.makedirs(ROOT_PATH+f'/repos/{user_name}_{proj_name}_{sha}/{file_path_wo_name}', exist_ok=True)
+    with open(ROOT_PATH+f'/repos/{user_name}_{proj_name}_{sha}/{file_path}', 'w', encoding="utf-8") as f:
         f.write(d)
 
 def get_datasample(lang, download_files_when_generate_datasamples=False, only_download_changed_files=False):
-    if not os.path.exists('./dataset'):
-        os.mkdir('./dataset')
-    for file_name in os.listdir(f"./changes/{lang}"):   # for every change recorded in jsonl
+    global ROOT_PATH
+    if not os.path.exists(ROOT_PATH+'/dataset'):
+        os.mkdir(ROOT_PATH+'/dataset')
+    for file_name in os.listdir(ROOT_PATH+f"/changes/{lang}"):   # for every change recorded in jsonl
         samples = []
         if file_name.startswith('.') or file_name[-6:] != '.jsonl':  # ignore any hidden file or files not jsonl
             continue
@@ -65,7 +68,7 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
             proj_name = '_'.join(l[1:-2]) # in case that the project name contain _
         
         # get commit message and html url
-        with jsonlines.open(f"./commit_history/{user_name}_{proj_name}.jsonl") as reader:
+        with jsonlines.open(ROOT_PATH+f"/commit_history/{user_name}_{proj_name}.jsonl") as reader:
             commits = list(reader)
         for commit in commits:
             if commit["sha"] == sha:
@@ -100,11 +103,11 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
                 git_clone_whole(user_name, proj_name, old_sha)
         except:
             print('==> Failed to clone the whole repo of specific commit')
-            os.remove(f'./changes/{lang}/{file_name}') 
+            os.remove(ROOT_PATH+f'/changes/{lang}/{file_name}') 
             continue
         
         # open jsonl file and convert to list
-        with jsonlines.open(f'./changes/{lang}/{file_name}') as reader:
+        with jsonlines.open(ROOT_PATH+f'/changes/{lang}/{file_name}') as reader:
             changes = list(reader)
 
         # aggregate changes that happens on the same file
@@ -138,7 +141,7 @@ def get_datasample(lang, download_files_when_generate_datasamples=False, only_do
                 else:
                     raise Exception(e)        
 
-        with jsonlines.open(f"./dataset/{lang}_dataset.jsonl", 'a') as writer:
+        with jsonlines.open(ROOT_PATH+f"/dataset/{lang}_dataset.jsonl", 'a') as writer:
             writer.write_all(samples)
         # delete the changes file when done
-        os.remove(f'./changes/{lang}/{file_name}')
+        os.remove(ROOT_PATH+f'/changes/{lang}/{file_name}')

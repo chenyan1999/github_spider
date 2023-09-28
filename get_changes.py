@@ -13,6 +13,7 @@ GITHUB_TOKENS = ['',\
                  '']
 CURR_TOKEN_IDX = 0
 GITHUB_TOKENS_RST_TIME = [time.time()-3600 for _ in range(len(GITHUB_TOKENS))]
+ROOT_PATH = '/media/chenyan/Backup Plus/CodeEdit_raw_dataset'
 
 def get_response(request_url, params=None, return_text=False):
     global CURR_TOKEN_IDX
@@ -31,7 +32,7 @@ def get_response(request_url, params=None, return_text=False):
                             proxies={"http": proxy}, timeout=40)
         except requests.exceptions.RequestException as e:
             if i < MAX_RETRIES - 1:
-                continues
+                continue
             raise Exception(e)
 
         if r.status_code == 200:
@@ -183,30 +184,31 @@ def extract_patch(patch):
     return change_rec
 
 def get_changes(lang, repo_num):
+    global ROOT_PATH
     # ---------------------- Get the top star repo's name ----------------------
-    if not os.path.exists("./repo_info"):
-        os.mkdir("./repo_info")
+    if not os.path.exists(ROOT_PATH+"/repo_info"):
+        os.mkdir(ROOT_PATH+"/repo_info")
     print("==> Starting to get repos of %s ..." % lang)
-    if os.path.exists(f"./repo_info/{lang}_top_star_repos.jsonl"):    # if have recorded repos before
+    if os.path.exists(ROOT_PATH+f"/repo_info/{lang}_top_star_repos.jsonl"):    # if have recorded repos before
         # open recored repo info
-        with jsonlines.open(f"./repo_info/{lang}_top_star_repos.jsonl") as reader:
+        with jsonlines.open(ROOT_PATH+f"/repo_info/{lang}_top_star_repos.jsonl") as reader:
             print(f"==> {lang}_top_star_repos.jsonl exists, read from local")
             repos = list(reader)
         if len(repos) < repo_num: # if the number of repo has not been satisfied
             repos = get_repos(lang, repo_num) # get the desired number of repos
             # save repo info
-            with jsonlines.open(f"./repo_info/{lang}_top_star_repos.jsonl", 'w') as writer:
+            with jsonlines.open(ROOT_PATH+f"/repo_info/{lang}_top_star_repos.jsonl", 'w') as writer:
                 writer.write_all(repos)
     else:
         repos = get_repos(lang, repo_num) # get the desired number of repos
         # save repo info
-        with jsonlines.open(f"./repo_info/{lang}_top_star_repos.jsonl", 'w') as writer:
+        with jsonlines.open(ROOT_PATH+f"/repo_info/{lang}_top_star_repos.jsonl", 'w') as writer:
             writer.write_all(repos)
     print(f"==> Get {str(len(repos[:repo_num]))} repos of {lang}")
 
     # ---------------------- Get the commit history of each repo ----------------------
-    if not os.path.exists("./commit_history"):
-        os.mkdir("./commit_history")
+    if not os.path.exists(ROOT_PATH+"/commit_history"):
+        os.mkdir(ROOT_PATH+"/commit_history")
     for repo in repos[:repo_num]:
         # skip repo if the commits of this repo has been processed
         if 'have_recorded_changes' in repo.keys() and repo['have_recorded_changes']:
@@ -217,15 +219,15 @@ def get_changes(lang, repo_num):
         user_name, proj_name = re.match('(.+)/(.+)', title).groups()
 
         # skip scrawling if the commit history of this repo has been recorded
-        if not os.path.exists(f"./commit_history/{user_name}_{proj_name}.jsonl"):
+        if not os.path.exists(ROOT_PATH+f"/commit_history/{user_name}_{proj_name}.jsonl"):
             print("==> Feching commit history from GitHub...")
             commit_d = get_all_response(f"https://api.github.com/repos/{user_name}/{proj_name}/commits")
             # save commit history
-            with jsonlines.open(f"./commit_history/{user_name}_{proj_name}.jsonl", 'w') as writer:
+            with jsonlines.open(ROOT_PATH+f"/commit_history/{user_name}_{proj_name}.jsonl", 'w') as writer:
                 writer.write_all(commit_d)
         else:
             print("==> Fecthing commit history from local...")
-            with jsonlines.open(f"./commit_history/{user_name}_{proj_name}.jsonl") as reader:
+            with jsonlines.open(ROOT_PATH+f"/commit_history/{user_name}_{proj_name}.jsonl") as reader:
                 commit_d = list(reader)
         print(f'==> Get {str(len(commit_d))} commit history')
 
@@ -234,7 +236,7 @@ def get_changes(lang, repo_num):
                 continue
             sha = item['sha']
             parent_sha = item["parents"][0]["sha"]
-            if os.path.exists(f"./changes/{lang}/{user_name}_{proj_name}_{sha}_{parent_sha}.jsonl"):
+            if os.path.exists(ROOT_PATH+f"/changes/{lang}/{user_name}_{proj_name}_{sha}_{parent_sha}.jsonl"):
                 continue  # if this commit has been transformed into changes jsonl, we ignore it
             print(f'==> Record {proj_name} changes in {sha}')
             request_url = "https://api.github.com/repos/{}/{}/commits/{}".format(user_name, proj_name,item["sha"])
@@ -270,9 +272,9 @@ def get_changes(lang, repo_num):
                 except:
                     print(f'==> Patch extraction failed in {sha}, {file_name_w_path}, ignored')
                     continue
-            if not os.path.exists(f"./changes/{lang}"):
-                os.makedirs(f"./changes/{lang}")
-            with jsonlines.open(f"./changes/{lang}/{user_name}_{proj_name}_{sha}_{parent_sha}.jsonl", 'w') as writer:
+            if not os.path.exists(ROOT_PATH+f"/changes/{lang}"):
+                os.makedirs(ROOT_PATH+f"/changes/{lang}")
+            with jsonlines.open(ROOT_PATH+f"/changes/{lang}/{user_name}_{proj_name}_{sha}_{parent_sha}.jsonl", 'w') as writer:
                 writer.write_all(change_records)
             # break # check only 1 commit
         print('==> The committed changes all wrote into jsonl files')  
@@ -280,6 +282,6 @@ def get_changes(lang, repo_num):
         # add a key to indicate that this repo has been recorded
         repo['have_recorded_changes'] = True  
         # save repo info
-        with jsonlines.open(f"./repo_info/{lang}_top_star_repos.jsonl", 'w') as writer:
+        with jsonlines.open(ROOT_PATH+f"/repo_info/{lang}_top_star_repos.jsonl", 'w') as writer:
             writer.write_all(repos)
             
