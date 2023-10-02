@@ -15,7 +15,7 @@ CURR_TOKEN_IDX = 0
 GITHUB_TOKENS_RST_TIME = [time.time()-3600 for _ in range(len(GITHUB_TOKENS))]
 ROOT_PATH = '/media/chenyan/Backup Plus/CodeEdit_raw_dataset'
 
-def get_response(request_url, params=None, return_text=False):
+def get_response(request_url, params=None):
     global CURR_TOKEN_IDX
     MAX_RETRIES = 10
     headers = {
@@ -57,10 +57,7 @@ def get_response(request_url, params=None, return_text=False):
                 time.sleep(1)
             if i == MAX_RETRIES - 1: # if all retries failed, raise error
                 raise ConnectionError(f"Cannot connect to website: {request_url}, status code: {r.status_code}")
-    if return_text:
-        return r.text
-    else:
-        return r.content
+    return r.content
 
 def get_all_response(request_url, params=None):
     '''
