@@ -9,26 +9,26 @@ import urllib.request
 from proxies_pool import proxy_list
 from user_agent_pool import user_agents
 
-from get_changes import get_response
-
+from get_changes import get_response, ROOT_PATH, GITHUB_TOKENS, CURR_TOKEN_IDX
 def git_clone(user_name, proj_name):
     # Check if this repo has been downloaded
     global ROOT_PATH
     global GITHUB_TOKENS, CURR_TOKEN_IDX
+    if not os.path.exists(ROOT_PATH+'/repos'):
+        os.mkdir(ROOT_PATH+'/repos')
     if os.path.exists(ROOT_PATH+f'/repos/{proj_name}/'):
         return
     # if not, download the whole repo of the latest version
     curr_dir = os.getcwd()
+    clone_url = f"https://{GITHUB_TOKENS[CURR_TOKEN_IDX]}@github.com/{user_name}/{proj_name}.git"
     try:
         os.chdir(os.path.normpath(ROOT_PATH+'/repos'))
-        clone_url = f"https://{GITHUB_TOKENS[CURR_TOKEN_IDX]}@github.com/{user_name}/{proj_name}.git"
-        
         git_clone_command = ["git", "clone", clone_url]
         # Run the Git clone command
         subprocess.run(git_clone_command, check=True)
     except:
         os.chdir(curr_dir)
-        raise Exception(f"==> Downloading {user_name}/{proj_name} failed")
+        raise Exception(f"==> Downloading {user_name}/{proj_name} from {clone_url} failed")
     
     os.chdir(curr_dir)
     
@@ -62,21 +62,6 @@ def get_datasample(lang):
                     commit_msg = ""
                 break # quit loop once find
 
-        # 从 GitHub 获取 pull message (无法从 git log 中获取)
-        try:
-            url = f'https://api.github.com/repos/{user_name}/{proj_name}/commits/{sha}/pulls'
-            content = get_response(url)
-            pull_info = json.loads(content)
-            if len(pull_info) != 1:
-                pull_msg = ""
-            else:
-                pull_info = pull_info[0]
-                pull_msg = pull_info["body"]
-        except:
-            # Normal if a commit do not have pull msg, do not raise error
-            print(f"==> {user_name}\'s {proj_name} of commit {sha} do not find pull msg")
-            pull_msg = ""
-
         print(f'==> Converting {user_name}/{proj_name}\'s commit {sha} into data samples')     
         # open jsonl file and convert to list
         with jsonlines.open(ROOT_PATH+f'/changes/{lang}/{file_name}') as reader:
@@ -101,7 +86,6 @@ def get_datasample(lang):
                 'file_path': file,
                 'changes': file_changes[file],
                 'commit_msg': commit_msg,
-                'pull_msg': pull_msg,
                 'html_url': html_url
             }
             samples.append(dic)      
@@ -116,6 +100,6 @@ def get_datasample(lang):
         print(f"==> {lang}_top_star_repos.jsonl exists, read from local")
         repos = list(reader)
     for repo in repos:
-        user_name = repo['user_name']['full_name'].split('/')[0]
+        user_name = repo['full_name'].split('/')[0]
         proj_name = repo['name']
         git_clone(user_name, proj_name)

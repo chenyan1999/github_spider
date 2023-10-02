@@ -4,11 +4,9 @@ from get_code import get_datasample
 
 if __name__ == '__main__':
     start = time.time()
-    lang = 'java' # java, python, typescript, go
+    lang = 'javascript' # java, python, typescript, go
     num_of_repo = 100 # the number of repo to be crawled
-    download_files_when_generate_datasamples = True
-    only_download_changed_files = True
     get_changes(lang, num_of_repo)
-    # get_datasample(lang, download_files_when_generate_datasamples, only_download_changed_files)
+    get_datasample(lang)
     end = time.time()
     print(f'==> Time elapsed: {end - start} seconds')
