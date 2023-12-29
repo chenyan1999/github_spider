@@ -1,0 +1,58 @@
+{
+    "commit_url_1": {
+        "commit_msg": "str, commit message",
+        "hunks": [
+            {
+                "id": "int, hunk id within this commit",
+                "code_window": [
+                    "str, code line1",
+                    "str, code line2",
+                    "..."
+                ],
+                "labels": [
+                    "str, label1",
+                    "str, label2",
+                    "..."
+                ],
+                "after_edit": [
+                    "str, edited code line1",
+                    "str, edited code line2",
+                    "修改位置在修改后的代码， 不包括上下文",
+                    ""
+                ],
+                "file_path": "str, 文件路径含文件名",
+                "type": "str, add or replace",
+                "edit_start_line_idx": "int, 修改开始行号"
+            },
+            {
+                "...": "..."
+            }
+        ],
+        "sliding_windows": [
+            {
+                "sliding_window": [
+                    "str, code line1",
+                    "str, code line2",
+                    "sliding window, may overlap with hunk or contain multiple hunks"
+                ],
+                "labels": [
+                    "str, label1",
+                    "str, label2",
+                    "label of sliding window"
+                ],
+                "overlap_hunk_id": [
+                    "int, hunk id have overlap with sliding window",
+                    "int, hunk id have overlap with sliding window"
+                ],
+                "file_path": "str, 文件路径含文件名",
+                "edit_start_line_idx": "int, 修改开始行号"
+            },
+            {
+                "...": "..."
+            }
+        ]
+    },
+    "commit_url_2": {
+        "...": "..."
+    }
+}

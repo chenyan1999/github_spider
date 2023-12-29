@@ -5,5 +5,8 @@
 /repos/
 /commit_history/
 .gitignore
-test.py
 tokens.txt
+__pycache__/
+commit_info/
+new_dataset/
+qualified_commit/

@@ -1,3 +1,7 @@
+# This script is used to crawl top star open source projects from GitHub by language
+# 1. It crawl the top k repositories' information, save to {ROOT_PATH}/repo_info/{lang}_top_star_repos.jsonl
+# 2. For each repository, it crawl all its commits' information, save to {ROOT_PATH}/commit_info/{lang}_commit_info.jsonl
+# 3. For each repository, it git clone the project to {ROOT_PATH}/repos/
 import os
 import re
 import json
@@ -5,15 +9,17 @@ import time
 import random
 import requests
 import jsonlines
+import subprocess
+from tqdm import tqdm
 
 from proxies_pool import proxy_list
 from user_agent_pool import user_agents    
 
-GITHUB_TOKENS = ['',\
-                 '']
+GITHUB_TOKENS = ['']
 CURR_TOKEN_IDX = 0
 GITHUB_TOKENS_RST_TIME = [time.time()-3600 for _ in range(len(GITHUB_TOKENS))]
-ROOT_PATH = '/media/chenyan/Backup Plus/CodeEdit_raw_dataset'
+# ROOT_PATH = '/media/chenyan/CodeEdit_raw_dataset'
+ROOT_PATH = './' # debug
 
 def get_response(request_url, params=None):
     global CURR_TOKEN_IDX
@@ -105,7 +111,8 @@ def get_repos(lang, repo_num):
             "page": "{}".format(str(page_idx)),
             "per_page": "100",
             "sort": "stars",
-            "order": "desc"
+            "order": "desc",
+            "license": "mit",
         }
         content = get_response(request_url, params)
         d = json.loads(content)
@@ -180,14 +187,36 @@ def extract_patch(patch):
         change_rec.append(change_item) # record this change
     return change_rec
 
-def get_changes(lang, repo_num):
+def git_clone(user_name, proj_name):
+    # Check if this repo has been downloaded
+    global ROOT_PATH
+    global GITHUB_TOKENS, CURR_TOKEN_IDX
+    if not os.path.exists(ROOT_PATH+'/repos'):
+        os.mkdir(ROOT_PATH+'/repos')
+    if os.path.exists(ROOT_PATH+f'/repos/{proj_name}/'):
+        return
+    # if not, download the whole repo of the latest version
+    curr_dir = os.getcwd()
+    clone_url = f"https://{GITHUB_TOKENS[CURR_TOKEN_IDX]}@github.com/{user_name}/{proj_name}.git"
+    try:
+        os.chdir(os.path.normpath(ROOT_PATH+'/repos'))
+        git_clone_command = ["git", "clone", clone_url]
+        # Run the Git clone command
+        subprocess.run(git_clone_command, check=True)
+    except:
+        os.chdir(curr_dir)
+        raise Exception(f"==> Downloading {user_name}/{proj_name} from {clone_url} failed")
+    
+    os.chdir(curr_dir)
+    
+def crawl(lang, repo_num):
     global ROOT_PATH
     # ---------------------- Get the top star repo's name ----------------------
     if not os.path.exists(ROOT_PATH+"/repo_info"):
         os.mkdir(ROOT_PATH+"/repo_info")
     print("==> Starting to get repos of %s ..." % lang)
     if os.path.exists(ROOT_PATH+f"/repo_info/{lang}_top_star_repos.jsonl"):    # if have recorded repos before
-        # open recored repo info
+        # open recorded repo info
         with jsonlines.open(ROOT_PATH+f"/repo_info/{lang}_top_star_repos.jsonl") as reader:
             print(f"==> {lang}_top_star_repos.jsonl exists, read from local")
             repos = list(reader)
@@ -203,82 +232,32 @@ def get_changes(lang, repo_num):
             writer.write_all(repos)
     print(f"==> Get {str(len(repos[:repo_num]))} repos of {lang}")
 
-    # ---------------------- Get the commit history of each repo ----------------------
-    if not os.path.exists(ROOT_PATH+"/commit_history"):
-        os.mkdir(ROOT_PATH+"/commit_history")
-    for repo in repos[:repo_num]:
-        # skip repo if the commits of this repo has been processed
-        if 'have_recorded_changes' in repo.keys() and repo['have_recorded_changes']:
-            print(f'==> Repo {repo["full_name"]} commit changes has been recorded')
-            continue
-        title = repo["full_name"]
-        print(f'==> In repo {title}')
+    with open(os.path.join(ROOT_PATH, 'repo_info', f'{lang}_top_star_repos.jsonl')) as f:
+        repos_info = ([json.loads(line) for line in f.readlines()])
+
+    commit_d = []    
+    for idx, repo in enumerate(tqdm(repos_info, desc='Get commit')):
+        try:
+            title = repo["full_name"]
+            print(f'==> In repo {title}')
+            user_name, proj_name = re.match('(.+)/(.+)', title).groups()
+            commit_d.extend(get_all_response(f"https://api.github.com/repos/{user_name}/{proj_name}/commits"))
+        except:
+            print(f'fail to get repo of idx {idx}')
+    print(f'{lang} have {len(commit_d)} commits')
+    if not os.path.exists(os.path.join(ROOT_PATH, 'commit_info')):
+        os.mkdir(os.path.join(ROOT_PATH, 'commit_info'))     
+    with jsonlines.open(os.path.join(ROOT_PATH,f"commit_info/{lang}_commit_info.jsonl"), 'w') as writer:
+        writer.write_all(commit_d)
+    
+    for repo in tqdm(repos_info, desc='Git clone repos'):
         user_name, proj_name = re.match('(.+)/(.+)', title).groups()
-
-        # skip scrawling if the commit history of this repo has been recorded
-        if not os.path.exists(ROOT_PATH+f"/commit_history/{user_name}_{proj_name}.jsonl"):
-            print("==> Feching commit history from GitHub...")
-            commit_d = get_all_response(f"https://api.github.com/repos/{user_name}/{proj_name}/commits")
-            # save commit history
-            with jsonlines.open(ROOT_PATH+f"/commit_history/{user_name}_{proj_name}.jsonl", 'w') as writer:
-                writer.write_all(commit_d)
-        else:
-            print("==> Fecthing commit history from local...")
-            with jsonlines.open(ROOT_PATH+f"/commit_history/{user_name}_{proj_name}.jsonl") as reader:
-                commit_d = list(reader)
-        print(f'==> Get {str(len(commit_d))} commit history')
-
-        for _, item in enumerate(commit_d): # for every commit version
-            if len(item["parents"]) != 1: # if this commit has more than one parent, we ignore it
-                continue
-            sha = item['sha']
-            parent_sha = item["parents"][0]["sha"]
-            if os.path.exists(ROOT_PATH+f"/changes/{lang}/{user_name}_{proj_name}_{sha}_{parent_sha}.jsonl"):
-                continue  # if this commit has been transformed into changes jsonl, we ignore it
-            print(f'==> Record {proj_name} changes in {sha}')
-            request_url = "https://api.github.com/repos/{}/{}/commits/{}".format(user_name, proj_name,item["sha"])
-            params = {
-                "per_page": '100',
-                "page": 1
-            }
-            files = []
-            while True: # loop to retrieve every file changed under this commit version 
-                content = get_response(request_url, params)
-                changes_d = json.loads(content)
-                files.extend(changes_d["files"])
-                if len(changes_d["files"]) < 100:
-                    break
-                else:
-                    time.sleep(1)
-                    params['page'] += 1
-                    
-            change_records = []
-            for file in files: # for every file changed in this commit version
-                if file['status'] not in ['modified', 'added', 'removed']: # if the file is not modified, added or removed, we ignore it
-                    continue
-                try:
-                    patch = file["patch"]  # exist situations where the commit contains no patch (e.g. rename a file) 
-                except:
-                    continue
-                file_name_w_path = file["filename"]
-                # identify delted and added lines
-                try:   # if the patch is not valid, we ignore it
-                    for item in extract_patch(patch):
-                        item['file_path'] = file_name_w_path # the file name with path
-                        change_records.append(item)
-                except:
-                    print(f'==> Patch extraction failed in {sha}, {file_name_w_path}, ignored')
-                    continue
-            if not os.path.exists(ROOT_PATH+f"/changes/{lang}"):
-                os.makedirs(ROOT_PATH+f"/changes/{lang}")
-            with jsonlines.open(ROOT_PATH+f"/changes/{lang}/{user_name}_{proj_name}_{sha}_{parent_sha}.jsonl", 'w') as writer:
-                writer.write_all(change_records)
-            # break # check only 1 commit
-        print('==> The committed changes all wrote into jsonl files')  
-
-        # add a key to indicate that this repo has been recorded
-        repo['have_recorded_changes'] = True  
-        # save repo info
-        with jsonlines.open(ROOT_PATH+f"/repo_info/{lang}_top_star_repos.jsonl", 'w') as writer:
-            writer.write_all(repos)
-            
+        git_clone(user_name, proj_name)
+        
+if __name__ == '__main__':
+    start = time.time()
+    lang = 'python' # java, python, typescript, go
+    num_of_repo = 1 # the number of repo to be crawled # debug
+    crawl(lang, num_of_repo)
+    end = time.time()
+    print(f'==> Time elapsed: {end - start} seconds')
