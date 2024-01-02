@@ -4,8 +4,7 @@ import re
 import os
 import json
 from tqdm import tqdm
-# ROOT_PATH = '/media/chenyan/CodeEdit_raw_dataset' # debug
-ROOT_PATH = './'
+ROOT_PATH = '/media/chenyan/CodeEdit_raw_dataset'
     
 def remove_pull_id(commit_message):
     # 定义匹配 pull request ID 的正则表达式
@@ -114,8 +113,17 @@ def clean_commit(lang):
                     
     print(f'{lang} have {len(filtered_commit_urls)} left, survive rate: {len(filtered_commit_urls)/len(commit_set)*100:.2f}%')
     print('Commit filtered out because:')
-    print(error_cnt)
-    
+    error_dict = {
+        "1": "Commit msg contain > 1 edit intention",
+        "2": "Commit msg contain non-ascii char",
+        "3": "Commit msg contain < 8 words or > 128 words",
+        "4": "Commit author / committer not real user",
+        "5": "Commit msg contain file name",
+        "6": "Commit msg contain external reference",
+        "7": "Merge pull request / branch commit"
+    }
+    for error_idx, error_num in error_cnt.items():
+        print(f'Rule {error_dict[error_idx]}: {error_num}')
 
     with open(os.path.join(ROOT_PATH, f'commit_info/{lang}_filtered_commit_urls.json'), 'w') as f:
         json.dump(filtered_commit_urls, f, indent=4)

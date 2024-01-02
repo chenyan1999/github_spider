@@ -18,8 +18,7 @@ from user_agent_pool import user_agents
 GITHUB_TOKENS = ['']
 CURR_TOKEN_IDX = 0
 GITHUB_TOKENS_RST_TIME = [time.time()-3600 for _ in range(len(GITHUB_TOKENS))]
-# ROOT_PATH = '/media/chenyan/CodeEdit_raw_dataset'
-ROOT_PATH = './' # debug
+ROOT_PATH = '/media/chenyan/CodeEdit_raw_dataset'
 
 def get_response(request_url, params=None):
     global CURR_TOKEN_IDX
@@ -191,21 +190,28 @@ def git_clone(user_name, proj_name):
     # Check if this repo has been downloaded
     global ROOT_PATH
     global GITHUB_TOKENS, CURR_TOKEN_IDX
+    curr_dir = os.getcwd()
     if not os.path.exists(ROOT_PATH+'/repos'):
         os.mkdir(ROOT_PATH+'/repos')
     if os.path.exists(ROOT_PATH+f'/repos/{proj_name}/'):
-        return
-    # if not, download the whole repo of the latest version
-    curr_dir = os.getcwd()
-    clone_url = f"https://{GITHUB_TOKENS[CURR_TOKEN_IDX]}@github.com/{user_name}/{proj_name}.git"
-    try:
-        os.chdir(os.path.normpath(ROOT_PATH+'/repos'))
-        git_clone_command = ["git", "clone", clone_url]
-        # Run the Git clone command
-        subprocess.run(git_clone_command, check=True)
-    except:
-        os.chdir(curr_dir)
-        raise Exception(f"==> Downloading {user_name}/{proj_name} from {clone_url} failed")
+        try:
+            os.chdir(os.path.normpath(ROOT_PATH+'/repos/'+proj_name))
+            git_pull_command = ["git", "pull"]
+            # Run the Git pull command
+            subprocess.run(git_pull_command, check=True)
+        except:
+            os.chdir(curr_dir)
+            raise Exception(f"==> Pulling {user_name}/{proj_name} failed")
+    else: # if not, download the whole repo of the latest version
+        clone_url = f"https://{GITHUB_TOKENS[CURR_TOKEN_IDX]}@github.com/{user_name}/{proj_name}.git"
+        try:
+            os.chdir(os.path.normpath(ROOT_PATH+'/repos'))
+            git_clone_command = ["git", "clone", clone_url]
+            # Run the Git clone command
+            subprocess.run(git_clone_command, check=True)
+        except:
+            os.chdir(curr_dir)
+            raise Exception(f"==> Downloading {user_name}/{proj_name} from {clone_url} failed")
     
     os.chdir(curr_dir)
     
@@ -235,29 +241,31 @@ def crawl(lang, repo_num):
     with open(os.path.join(ROOT_PATH, 'repo_info', f'{lang}_top_star_repos.jsonl')) as f:
         repos_info = ([json.loads(line) for line in f.readlines()])
 
-    commit_d = []    
-    for idx, repo in enumerate(tqdm(repos_info, desc='Get commit')):
-        try:
-            title = repo["full_name"]
-            print(f'==> In repo {title}')
-            user_name, proj_name = re.match('(.+)/(.+)', title).groups()
-            commit_d.extend(get_all_response(f"https://api.github.com/repos/{user_name}/{proj_name}/commits"))
-        except:
-            print(f'fail to get repo of idx {idx}')
-    print(f'{lang} have {len(commit_d)} commits')
-    if not os.path.exists(os.path.join(ROOT_PATH, 'commit_info')):
-        os.mkdir(os.path.join(ROOT_PATH, 'commit_info'))     
-    with jsonlines.open(os.path.join(ROOT_PATH,f"commit_info/{lang}_commit_info.jsonl"), 'w') as writer:
-        writer.write_all(commit_d)
+    commit_d = []
+    if not os.path.exists(os.path.join(ROOT_PATH,f"commit_info/{lang}_commit_info.jsonl")):
+        for idx, repo in enumerate(tqdm(repos_info, desc='Get commit')):
+            try:
+                title = repo["full_name"]
+                print(f'==> In repo {title}')
+                user_name, proj_name = re.match('(.+)/(.+)', title).groups()
+                commit_d.extend(get_all_response(f"https://api.github.com/repos/{user_name}/{proj_name}/commits"))
+            except:
+                print(f'fail to get repo of idx {idx}')
+        print(f'{lang} have {len(commit_d)} commits')
+        if not os.path.exists(os.path.join(ROOT_PATH, 'commit_info')):
+            os.mkdir(os.path.join(ROOT_PATH, 'commit_info'))     
+        with jsonlines.open(os.path.join(ROOT_PATH,f"commit_info/{lang}_commit_info.jsonl"), 'w') as writer:
+            writer.write_all(commit_d)
     
     for repo in tqdm(repos_info, desc='Git clone repos'):
+        title = repo["full_name"]
         user_name, proj_name = re.match('(.+)/(.+)', title).groups()
         git_clone(user_name, proj_name)
         
 if __name__ == '__main__':
     start = time.time()
     lang = 'python' # java, python, typescript, go
-    num_of_repo = 1 # the number of repo to be crawled # debug
+    num_of_repo = 100 # the number of repo to be crawled # debug
     crawl(lang, num_of_repo)
     end = time.time()
     print(f'==> Time elapsed: {end - start} seconds')

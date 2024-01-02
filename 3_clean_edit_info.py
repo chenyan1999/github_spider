@@ -4,8 +4,7 @@ import os
 import json
 import subprocess
 from tqdm import tqdm
-# ROOT_PATH = '/media/chenyan/CodeEdit_raw_dataset' # debug
-ROOT_PATH = './'
+ROOT_PATH = '/media/chenyan/CodeEdit_raw_dataset'
 
 def detect_extension(file_names: list[str]):
     # 使用os.path.basename获取文件名
@@ -193,7 +192,18 @@ def clean_edit(lang):
     
     print(f'{lang} have {cnt} left, survive rate: {cnt/len(commit_urls)*100:.2f}%')
     print('Commit filtered out because:')
-    print(error_cnt)
+    error_dict = {
+        "1": "Error in acquire git diff",
+        "2": "Contain edit that changes file name",
+        "3": "Contain edit on non-source files",
+        "4": "Edit fail to match @@ -xx,xx +xx,xx @@",
+        "5": "Edit/file contain non-ascii char",
+        "6": "Commit contain > 10 hunks or < 3 hunks",
+        "7": "Edit longer than 15 lines",
+        "8": "Edit is trivial"
+    }
+    for error_idx, error_num in error_cnt.items():
+        print(f'Rule {error_dict[error_idx]}: {error_num}')
 
 if __name__ == '__main__':
     lang = 'python'

@@ -3,7 +3,7 @@ import os
 import json
 import random
 
-ROOT_PATH = "./" # debug
+ROOT_PATH = "/media/chenyan/CodeEdit_raw_dataset"
 
 def make_dataset(lang):
     with open(os.path.join(ROOT_PATH, "qualified_commit", f"{lang}_qualified_commit_snapshots.json"), "r") as f:
