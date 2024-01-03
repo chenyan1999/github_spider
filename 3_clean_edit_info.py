@@ -4,7 +4,7 @@ import os
 import json
 import subprocess
 from tqdm import tqdm
-ROOT_PATH = '/media/chenyan/CodeEdit_raw_dataset'
+ROOT_PATH = './'
 
 def detect_extension(file_names: list[str]):
     # 使用os.path.basename获取文件名
@@ -39,14 +39,11 @@ def convert_diff_section_to_snapshot(file_w_diff: str):
         elif line.startswith(" ") and under_edit == True:
             under_edit = False
             snapshot.append(edit.copy())
-            # for window in snapshot:
-            #     print(window)
             consecutive_code.append(line[1:]) 
         elif line.startswith("-") and under_edit == False:
             under_edit = True
-            snapshot.append(consecutive_code.copy())
-            # for window in snapshot:
-            #     print(window)
+            if consecutive_code != []:
+                snapshot.append(consecutive_code.copy())
             consecutive_code = []
             edit = {
                 "type": "replace",
@@ -56,9 +53,8 @@ def convert_diff_section_to_snapshot(file_w_diff: str):
             edit["before"].append(line[1:])
         elif line.startswith("+") and under_edit == False:
             under_edit = True
-            snapshot.append(consecutive_code.copy())
-            # for window in snapshot:
-            #     print(window)
+            if consecutive_code != []:
+                snapshot.append(consecutive_code.copy())
             consecutive_code = []
             edit = {
                 "type": "add",
@@ -110,6 +106,9 @@ def git_parse_diff(commit_url: str):
             raise ValueError(f"2 {commit_url} Error: Contain edit changes file name: {before_filename} -> {after_filename}")
         file_names.append(before_filename)
     
+    if len(file_names) < 2:
+        raise ValueError(f'11 {commit_url} Error: Contain edit on less than 2 files')
+    
     # Rule 1: do not contain auto-generated files
     if detect_extension(list(set(file_names))):
         raise ValueError(f'3 {commit_url} Error: Contain edit on non-source files')
@@ -124,7 +123,6 @@ def git_parse_diff(commit_url: str):
             file_name = file_name_match.group(1)
         else:
             raise ValueError(f"5 {commit_url} Error: file name contain non-ascii char")
-        
         
         # 2.2 get the diff of the whole file
         # (if -U{number} is set large enough, a file should contain only 1 @@ -xx,xx +xx,xx @@)
@@ -141,10 +139,14 @@ def git_parse_diff(commit_url: str):
         # type 1: list of line of code, unchanged
         # type 2: dict of edit, have key: "type", "before", "after"
         snapshot, edits = convert_diff_section_to_snapshot(after_at_symbol_content)
+        if len(snapshot) == len(edits):
+            raise ValueError(f"9 {commit_url} Error: file contain only edit")
+        if type(snapshot[0]) == dict and snapshot[0]['type'] == 'add':
+            raise ValueError(f"10 {commit_url} Error: file contain add edit at first line")
         all_edit_num += len(edits)
-        # Rule 5: contain > 3 hunk and < 10 hunk
-        if all_edit_num > 10: # early stop
-            raise ValueError(f'6 {commit_url} Error: Commit contain more than 10 hunk, hunk num >= {all_edit_num}')
+        # Rule 5: contain > 3 hunk and < 15 hunk
+        if all_edit_num > 15: # early stop
+            raise ValueError(f'6 {commit_url} Error: Commit contain more than 15 hunk, hunk num >= {all_edit_num}')
         for edit in edits:
             # Rule 3: edit less than 15 lines
             if len(edit['before']) > 15 or len(edit['after']) > 15:
@@ -156,7 +158,7 @@ def git_parse_diff(commit_url: str):
             if edit['type'] == 'add' and "".join(edit['after']).strip() == '':
                 raise ValueError(f'8 {commit_url} Error: Edit is trivial: {edit["before"]} -> {edit["after"]}')
         result_dict[file_name] = snapshot
-    # Rule 5: contain > 3 hunk and < 10 hunk
+    # Rule 5: contain > 3 hunk and < 15 hunk
     if all_edit_num < 3:
         raise ValueError(f'6 {commit_url} Error: Commit contain less than 3 hunk, hunk num: {all_edit_num}')
     return result_dict
@@ -174,7 +176,7 @@ def clean_edit(lang):
             commit_snapshots[commit_url] = result_dict
         except Exception as e:
             label = str(e).split(' ')[0]
-            if label not in ['1', '2', '3', '4', '5', '6', '7', '8']:
+            if label not in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']:
                 print('other error: ', e)
                 print(commit_url)
                 break
@@ -198,12 +200,15 @@ def clean_edit(lang):
         "3": "Contain edit on non-source files",
         "4": "Edit fail to match @@ -xx,xx +xx,xx @@",
         "5": "Edit/file contain non-ascii char",
-        "6": "Commit contain > 10 hunks or < 3 hunks",
+        "6": "Commit contain > 15 hunks or < 3 hunks",
         "7": "Edit longer than 15 lines",
-        "8": "Edit is trivial"
+        "8": "Edit is trivial",
+        "9": "File contain only edit",
+        "10": "File contain add edit at first line",
+        "11": "Contain edit on less than 2 files"
     }
     for error_idx, error_num in error_cnt.items():
-        print(f'Rule {error_dict[error_idx]}: {error_num}')
+        print(f'Rule {error_idx} {error_dict[error_idx]}: {error_num}')
 
 if __name__ == '__main__':
     lang = 'python'

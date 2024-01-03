@@ -4,7 +4,7 @@ import re
 import os
 import json
 from tqdm import tqdm
-ROOT_PATH = '/media/chenyan/CodeEdit_raw_dataset'
+ROOT_PATH = './'
     
 def remove_pull_id(commit_message):
     # 定义匹配 pull request ID 的正则表达式
@@ -123,7 +123,7 @@ def clean_commit(lang):
         "7": "Merge pull request / branch commit"
     }
     for error_idx, error_num in error_cnt.items():
-        print(f'Rule {error_dict[error_idx]}: {error_num}')
+        print(f'Rule {error_idx} {error_dict[error_idx]}: {error_num}')
 
     with open(os.path.join(ROOT_PATH, f'commit_info/{lang}_filtered_commit_urls.json'), 'w') as f:
         json.dump(filtered_commit_urls, f, indent=4)

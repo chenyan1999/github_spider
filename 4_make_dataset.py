@@ -1,9 +1,18 @@
 # This script is used to convert snapshots within the same commit into a dataset
 import os
+import re
 import json
 import random
+from tqdm import tqdm
 
-ROOT_PATH = "/media/chenyan/CodeEdit_raw_dataset"
+ROOT_PATH = "./"
+
+def clean_msg(msg: str):
+    # remove pull request id, e.g. (#1234)
+    pr_id_pattern = r'\(#(\d+)\)'
+    msg = re.sub(pr_id_pattern, '', msg)
+
+    return msg
 
 def make_dataset(lang):
     with open(os.path.join(ROOT_PATH, "qualified_commit", f"{lang}_qualified_commit_snapshots.json"), "r") as f:
@@ -13,14 +22,14 @@ def make_dataset(lang):
         commits_info = [json.loads(line) for line in f.readlines()]
     
     dataset = {}
-    for commit_url, snapshots in snapshots_by_commit.items():
+    for commit_url, snapshots in tqdm(snapshots_by_commit.items()):
         dataset[commit_url] = {}
         # find commit msg
         for commit_info in commits_info:
             if commit_url == commit_info["html_url"]:
                 commit_msg = commit_info["commit"]["message"]
                 break
-        dataset[commit_url]["commit_msg"] = commit_msg
+        dataset[commit_url]["commit_msg"] = clean_msg(commit_msg)
         
         # assign id to each hunk
         hunk_id = 0
@@ -147,7 +156,9 @@ def make_dataset(lang):
             else:
                 type1_sliding_windows.append(sliding_window)
         if len(type2_sliding_windows) != 0:
-            type2_sliding_windows = random.sample(type2_sliding_windows, max(1, len(type1_sliding_windows) // 3))
+            sample_number = max(1, len(type1_sliding_windows) // 3)
+            sample_number = min(sample_number, len(type2_sliding_windows))
+            type2_sliding_windows = random.sample(type2_sliding_windows, sample_number)
             # shuffle type 1 and type 2 sliding windows
             sampled_all_sliding_windows = type1_sliding_windows + type2_sliding_windows
             random.shuffle(sampled_all_sliding_windows)
