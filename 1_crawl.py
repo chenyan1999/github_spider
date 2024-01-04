@@ -242,20 +242,19 @@ def crawl(lang, repo_num):
         repos_info = ([json.loads(line) for line in f.readlines()])
 
     commit_d = []
-    if not os.path.exists(os.path.join(ROOT_PATH,f"commit_info/{lang}_commit_info.jsonl")):
-        for idx, repo in enumerate(tqdm(repos_info, desc='Get commit')):
-            try:
-                title = repo["full_name"]
-                print(f'==> In repo {title}')
-                user_name, proj_name = re.match('(.+)/(.+)', title).groups()
-                commit_d.extend(get_all_response(f"https://api.github.com/repos/{user_name}/{proj_name}/commits"))
-            except:
-                print(f'fail to get repo of idx {idx}')
-        print(f'{lang} have {len(commit_d)} commits')
-        if not os.path.exists(os.path.join(ROOT_PATH, 'commit_info')):
-            os.mkdir(os.path.join(ROOT_PATH, 'commit_info'))     
-        with jsonlines.open(os.path.join(ROOT_PATH,f"commit_info/{lang}_commit_info.jsonl"), 'w') as writer:
-            writer.write_all(commit_d)
+    for idx, repo in enumerate(tqdm(repos_info, desc='Get commit')):
+        try:
+            title = repo["full_name"]
+            print(f'==> In repo {title}')
+            user_name, proj_name = re.match('(.+)/(.+)', title).groups()
+            commit_d.extend(get_all_response(f"https://api.github.com/repos/{user_name}/{proj_name}/commits"))
+        except:
+            print(f'fail to get repo of idx {idx}')
+    print(f'{lang} have {len(commit_d)} commits')
+    if not os.path.exists(os.path.join(ROOT_PATH, 'commit_info')):
+        os.mkdir(os.path.join(ROOT_PATH, 'commit_info'))     
+    with jsonlines.open(os.path.join(ROOT_PATH,f"commit_info/{lang}_commit_info.jsonl"), 'w') as writer:
+        writer.write_all(commit_d)
     
     for repo in tqdm(repos_info, desc='Git clone repos'):
         title = repo["full_name"]
