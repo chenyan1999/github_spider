@@ -10,3 +10,5 @@ __pycache__/
 commit_info/
 new_dataset/
 qualified_commit/
+nohup_java.out
+nohup_javascript.out

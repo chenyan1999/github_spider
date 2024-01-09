@@ -209,7 +209,24 @@ def make_dataset(lang):
                 if len(sliding_window["code_window"]) > 5:
                     dataset[commit_url]["sliding_windows"].append(sliding_window)
     
-    if not os.path.exists(os.path.join(ROOT_PATH, "new_dataset")):
-        os.mkdir(os.path.join(ROOT_PATH, "new_dataset")) 
-    with open(os.path.join(ROOT_PATH, "new_dataset", f"{lang}_dataset.json"), "w") as f:
-        json.dump(dataset, f, indent=4)
+    if not os.path.exists(os.path.join(ROOT_PATH, "new_dataset", lang)):
+        os.mkdirs(os.path.join(ROOT_PATH, "new_dataset", lang)) 
+    
+    # extract 70% of dataset as training set, 10% as dev set, 20% as test sets
+    train_dataset = {}
+    dev_dataset = {}
+    test_dataset = {}
+    dataset_size = len(dataset)
+    for idx, commit_url, data in enumerate(dataset.items()):
+        if idx < dataset_size * 0.7:
+            train_dataset[commit_url] = data
+        elif idx < dataset_size * 0.8:
+            dev_dataset[commit_url] = data
+        else:
+            test_dataset[commit_url] = data
+    with open(os.path.join(ROOT_PATH, "new_dataset", lang, "train.json"), "w") as f:
+        json.dump(train_dataset, f, indent=4)
+    with open(os.path.join(ROOT_PATH, "new_dataset", lang, "dev.json"), "w") as f:
+        json.dump(dev_dataset, f, indent=4)
+    with open(os.path.join(ROOT_PATH, "new_dataset", lang, "test.json"), "w") as f:
+        json.dump(test_dataset, f, indent=4)
