@@ -5,8 +5,12 @@ ROOT_PATH = "./"
 def count(lang: str):
     global ROOT_PATH
     
-    with open(os.path.join(ROOT_PATH, "new_dataset", f"{lang}_dataset.json"), "r") as f:
+    with open(os.path.join(ROOT_PATH, "new_dataset", lang, "train.json"), "r") as f:
         dataset = json.load(f)
+    with open(os.path.join(ROOT_PATH, "new_dataset", lang, "test.json"), "r") as f:
+        dataset.update(json.load(f))
+    with open(os.path.join(ROOT_PATH, "new_dataset", lang, "val.json"), "r") as f:
+        dataset.update(json.load(f))
         
     # count project number
     projects = set()
