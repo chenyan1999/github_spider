@@ -210,14 +210,14 @@ def make_dataset(lang):
                     dataset[commit_url]["sliding_windows"].append(sliding_window)
     
     if not os.path.exists(os.path.join(ROOT_PATH, "new_dataset", lang)):
-        os.mkdirs(os.path.join(ROOT_PATH, "new_dataset", lang)) 
+        os.makedirs(os.path.join(ROOT_PATH, "new_dataset", lang)) 
     
     # extract 70% of dataset as training set, 10% as dev set, 20% as test sets
     train_dataset = {}
     dev_dataset = {}
     test_dataset = {}
     dataset_size = len(dataset)
-    for idx, commit_url, data in enumerate(dataset.items()):
+    for idx, (commit_url, data) in enumerate(dataset.items()):
         if idx < dataset_size * 0.7:
             train_dataset[commit_url] = data
         elif idx < dataset_size * 0.8:

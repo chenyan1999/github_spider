@@ -9,7 +9,7 @@ def count(lang: str):
         dataset = json.load(f)
     with open(os.path.join(ROOT_PATH, "new_dataset", lang, "test.json"), "r") as f:
         dataset.update(json.load(f))
-    with open(os.path.join(ROOT_PATH, "new_dataset", lang, "val.json"), "r") as f:
+    with open(os.path.join(ROOT_PATH, "new_dataset", lang, "dev.json"), "r") as f:
         dataset.update(json.load(f))
         
     # count project number
