@@ -40,7 +40,7 @@
                     "str, label2",
                     "label of sliding window"
                 ],
-                "overlap_hunk_id": [
+                "overlap_hunk_ids": [
                     "int, hunk id have overlap with sliding window",
                     "int, hunk id have overlap with sliding window"
                 ],

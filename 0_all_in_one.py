@@ -2,7 +2,7 @@ from importlib import import_module
 
 if __name__ == '__main__':
     lang = 'python' 
-    num_of_repo = 1 
+    num_of_repo = 100 
 
     # Step 1: get repos, commits and clone to local
     step_1 = import_module("1_crawl")

@@ -135,6 +135,9 @@ def git_parse_diff(commit_url: str):
         # Rule 2: do not contain non-ascii chars
         if not after_at_symbol_content.isascii():
             raise ValueError(f"5 {commit_url} Error: Edit/file contain non-ascii char")
+        # Rule 12: do not contain <mask> or <MASK>
+        if '<mask>' in after_at_symbol_content or '<MASK>' in after_at_symbol_content:
+            raise ValueError(f"12 {commit_url} Error: Edit/file contain <mask> or <MASK>")
         # form snapshot: each element:
         # type 1: list of line of code, unchanged
         # type 2: dict of edit, have key: "type", "before", "after"
@@ -176,7 +179,7 @@ def clean_edit(lang):
             commit_snapshots[commit_url] = result_dict
         except Exception as e:
             label = str(e).split(' ')[0]
-            if label not in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']:
+            if label not in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']:
                 print('other error: ', e)
                 print(commit_url)
                 break
@@ -205,7 +208,8 @@ def clean_edit(lang):
         "8": "Edit is trivial",
         "9": "File contain only edit",
         "10": "File contain add edit at first line",
-        "11": "Contain edit on less than 2 files"
+        "11": "Contain edit on less than 2 files",
+        "12": "Edit/file contain <mask> or <MASK>"
     }
     for error_idx, error_num in error_cnt.items():
         print(f'Rule {error_idx} {error_dict[error_idx]}: {error_num}')
