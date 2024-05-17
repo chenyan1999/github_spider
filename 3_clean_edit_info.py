@@ -76,7 +76,7 @@ def convert_diff_section_to_snapshot(file_w_diff: str):
             edits.append(window)
     return snapshot, edits
    
-def git_parse_diff(commit_url: str):
+def git_parse_diff(commit_url: str, strict=True):
     global ROOT_PATH
     proj_name = commit_url.split('/')[-3]
     repo_path = os.path.join(ROOT_PATH, 'repos',proj_name)
@@ -148,7 +148,9 @@ def git_parse_diff(commit_url: str):
             raise ValueError(f"10 {commit_url} Error: file contain add edit at first line")
         all_edit_num += len(edits)
         # Rule 5: contain > 3 hunk and < 15 hunk
-        if all_edit_num > 15: # early stop
+        if all_edit_num > 15 and strict: # early stop
+            raise ValueError(f'6 {commit_url} Error: Commit contain more than 15 hunk, hunk num >= {all_edit_num}')
+        if all_edit_num > 30 and not strict: # need to stop even if not strict
             raise ValueError(f'6 {commit_url} Error: Commit contain more than 15 hunk, hunk num >= {all_edit_num}')
         for edit in edits:
             # Rule 3: edit less than 15 lines
