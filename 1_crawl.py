@@ -242,7 +242,7 @@ def crawl(lang, repo_num):
         repos_info = ([json.loads(line) for line in f.readlines()])
 
     commit_d = []
-    for idx, repo in enumerate(tqdm(repos_info, desc='Get commit')):
+    for idx, repo in enumerate(tqdm(repos_info[:repo_num], desc='Get commit')):
         try:
             title = repo["full_name"]
             print(f'==> In repo {title}')
@@ -256,7 +256,7 @@ def crawl(lang, repo_num):
     with jsonlines.open(os.path.join(ROOT_PATH,f"commit_info/{lang}_commit_info.jsonl"), 'w') as writer:
         writer.write_all(commit_d)
     
-    for repo in tqdm(repos_info, desc='Git clone repos'):
+    for repo in tqdm(repos_info[:repo_num], desc='Git clone repos'):
         title = repo["full_name"]
         user_name, proj_name = re.match('(.+)/(.+)', title).groups()
         git_clone(user_name, proj_name)

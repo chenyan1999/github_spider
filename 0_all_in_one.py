@@ -18,8 +18,8 @@ if __name__ == '__main__':
     
     # Step 4: make a dataset
     step_4 = import_module("4_make_dataset")
-    step_4.make_dataset(lang)
+    step_4.make_dataset(lang, "dataset_fine_grain")
     
     # Step 5: count dataset
     step_5 = import_module("5_count")
-    step_5.count(lang)
+    step_5.count(lang, "dataset_fine_grain")

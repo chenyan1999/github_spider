@@ -2,9 +2,32 @@
 import re
 import os
 import json
+import signal
 import subprocess
 from tqdm import tqdm
+from code_ast import *
 ROOT_PATH = './'
+
+# 超时处理函数，定制化错误信息
+def timeout_handler(signum, frame, commit_url):
+    raise ValueError(f"14 {commit_url} Error: runtime exceeded 10 seconds")
+
+# 装饰器，用于给函数添加超时中断功能，并传递 commit_url
+def timeout(seconds):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            # 提取 commit_url 从函数参数中，假设它是位置参数中的第一个
+            commit_url = args[0] if args else kwargs.get('commit_url', 'unknown')
+            # 设置信号处理函数，并传递 commit_url 作为额外参数
+            signal.signal(signal.SIGALRM, lambda signum, frame: timeout_handler(signum, frame, commit_url))
+            signal.alarm(seconds)  # 设置定时器，单位是秒
+            try:
+                result = func(*args, **kwargs)
+            finally:
+                signal.alarm(0)  # 取消定时器
+            return result
+        return wrapper
+    return decorator
 
 def detect_extension(file_names: list[str]):
     # 使用os.path.basename获取文件名
@@ -16,14 +39,8 @@ def detect_extension(file_names: list[str]):
             extension = '.'+file_name_elements[-1]
         else:
             extension =  '.'+'.'.join(file_name_elements[-2:])
-        # white_list = ['.go', '.js', '.java', '.py', '.ts', '.tsx']
-        auto_gen_file_type = ['.map', '.lock', '.build', '.sample', '.min.js', '.bundle.js', '.less'  # Javascript
-            '.class', '.jar', '.war', '.ear', '.bak', '.log', '.tmp',  # Java
-            '.tsbuildinfo',  # Typescript
-            '.pyc', '.pyo', '.pyd', '.so', '.dll',  # Python
-            '.a', '.o', '.test', '.cover', '.prof', '.exe', '.pb.go', '.gen.go', '.swagger.go', '.generated.go'# Go
-            '.css', '.html', '.sh', '.pem']
-        if extension in auto_gen_file_type:
+        white_list = ['.go', '.js', '.java', '.py', '.ts', '.tsx']
+        if extension not in white_list:
             return True
     return False
     
@@ -38,6 +55,8 @@ def convert_diff_section_to_snapshot(file_w_diff: str):
             consecutive_code.append(line[1:])
         elif line.startswith(" ") and under_edit == True:
             under_edit = False
+            if edit["type"] == "replace" and edit["after"] == []:
+                edit["type"] = "delete"
             snapshot.append(edit.copy())
             consecutive_code.append(line[1:]) 
         elif line.startswith("-") and under_edit == False:
@@ -57,7 +76,7 @@ def convert_diff_section_to_snapshot(file_w_diff: str):
                 snapshot.append(consecutive_code.copy())
             consecutive_code = []
             edit = {
-                "type": "add",
+                "type": "insert",
                 "before": [],
                 "after": []
             }
@@ -67,6 +86,8 @@ def convert_diff_section_to_snapshot(file_w_diff: str):
         elif line.startswith("-") and under_edit == True:
             edit["before"].append(line[1:])
     if under_edit == True:
+        if edit["type"] == "replace" and edit["after"] == []:
+            edit["type"] = "delete"
         snapshot.append(edit.copy())
     if under_edit == False:
         snapshot.append(consecutive_code.copy())
@@ -75,8 +96,35 @@ def convert_diff_section_to_snapshot(file_w_diff: str):
         if type(window) == dict:
             edits.append(window)
     return snapshot, edits
-   
-def git_parse_diff(commit_url: str, strict=True):
+
+def finer_grain_snapshot(snapshot: list, lang: str):
+    finer_grain_snapshot = []
+    edits = []
+    for window in snapshot:
+        if type(window) == list:
+            finer_grain_snapshot.append(window)
+            continue
+        elif type(window) == dict and window["type"] != "replace":
+            finer_grain_snapshot.append(window)
+            edits.append(window)
+        else:
+            try:
+                blocks = finer_grain_window(window["before"], window["after"], lang)
+            except:
+                return None, None
+            window = {
+                "type": "replace",
+                "before": window["before"],
+                "after": window["after"],
+                "blocks": blocks
+            }
+            finer_grain_snapshot.append(window)
+            edits.append(window)
+    
+    return finer_grain_snapshot, edits
+
+@timeout(10)
+def git_parse_diff(commit_url: str, lang: str, strict: bool=True):
     global ROOT_PATH
     proj_name = commit_url.split('/')[-3]
     repo_path = os.path.join(ROOT_PATH, 'repos',proj_name)
@@ -101,22 +149,23 @@ def git_parse_diff(commit_url: str, strict=True):
         after_filename = match.group(2)
         try:
             assert before_filename == after_filename
-            file_name = before_filename
         except:
             raise ValueError(f"2 {commit_url} Error: Contain edit changes file name: {before_filename} -> {after_filename}")
         file_names.append(before_filename)
     
+    # Rule 11: do not contain edit on less than 2 files
+    file_names = list(set(file_names))
     if len(file_names) < 2:
         raise ValueError(f'11 {commit_url} Error: Contain edit on less than 2 files')
     
     # Rule 1: do not contain auto-generated files
-    if detect_extension(list(set(file_names))):
+    if detect_extension(file_names):
         raise ValueError(f'3 {commit_url} Error: Contain edit on non-source files')
         
     # 3. split into diff section, 1 section = 1 file
     diff_sections = re.findall(r'diff --git[^\n]*\n.*?(?=\ndiff --git|$)', git_diff_str, re.DOTALL)
     all_edit_num = 0
-    for section in diff_sections:
+    for i, section in enumerate(diff_sections):
         # 2.1 parse file name (w/ path), make sure edit don't change file name
         file_name_match = re.match(r'diff --git a/(.+) b/(.+)', section)
         if file_name_match:
@@ -141,7 +190,11 @@ def git_parse_diff(commit_url: str, strict=True):
         # form snapshot: each element:
         # type 1: list of line of code, unchanged
         # type 2: dict of edit, have key: "type", "before", "after"
-        snapshot, edits = convert_diff_section_to_snapshot(after_at_symbol_content)
+        snapshot, _ = convert_diff_section_to_snapshot(after_at_symbol_content)
+        snapshot, edits = finer_grain_snapshot(snapshot, lang)
+        if snapshot is None and edits is None:
+            raise ValueError(f"13 {commit_url} Error: Fail to parse finer grain snapshot")
+
         if len(snapshot) == len(edits):
             raise ValueError(f"9 {commit_url} Error: file contain only edit")
         if type(snapshot[0]) == dict and snapshot[0]['type'] == 'add':
@@ -174,14 +227,14 @@ def clean_edit(lang):
     cnt = 0
     error_cnt = {}
     commit_snapshots = {}
-    for commit_url in tqdm(commit_urls):
+    for commit_idx, commit_url in enumerate(tqdm(commit_urls)):
         try:
-            result_dict = git_parse_diff(commit_url)
+            result_dict = git_parse_diff(commit_url, lang)
             cnt += 1
             commit_snapshots[commit_url] = result_dict
         except Exception as e:
             label = str(e).split(' ')[0]
-            if label not in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']:
+            if label not in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14']:
                 print('other error: ', e)
                 print(commit_url)
                 break
@@ -211,7 +264,9 @@ def clean_edit(lang):
         "9": "File contain only edit",
         "10": "File contain add edit at first line",
         "11": "Contain edit on less than 2 files",
-        "12": "Edit/file contain <mask> or <MASK>"
+        "12": "Edit/file contain <mask> or <MASK>",
+        "13": "Fail to parse finer grain snapshot",
+        "14": "Runtime exceeded 10 seconds"
     }
     for error_idx, error_num in error_cnt.items():
         print(f'Rule {error_idx} {error_dict[error_idx]}: {error_num}')

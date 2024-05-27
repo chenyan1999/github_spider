@@ -11,3 +11,6 @@ commit_info/
 new_dataset/
 qualified_commit/
 nohup*
+tmp/
+*ipynb
+fine_grain_dataset/

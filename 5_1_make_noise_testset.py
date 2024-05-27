@@ -4,10 +4,10 @@ import json
 from tqdm import tqdm
 from importlib import import_module
 
-def make_noise_testset(lang: str):
+def make_noise_testset(lang: str, dataset_name: str):
     step_3 = import_module("3_clean_edit_info")
     # 1. fisrt load the original test dataset, extract all project names in test dataset
-    with open(f"./new_dataset/{lang}/test.json", "r") as f:
+    with open(f"./{dataset_name}/{lang}/test.json", "r") as f:
         test_dataset = json.load(f)
     print("# of commits in test dataset: ", len(test_dataset))
     project_names = []
@@ -73,9 +73,10 @@ def make_noise_testset(lang: str):
     print("# of commits in noise test dataset: ", len(test_commit_snapshots))
     dataset = step_4.make_single_dataset(lang, test_commit_snapshots)
     
-    with open(os.path.join("./new_dataset", lang, "noise_test.json"), "w") as f:
+    with open(os.path.join(dataset_name, lang, "noise_test.json"), "w") as f:
         json.dump(dataset, f, indent=4)
         
 if __name__ == '__main__':
     lang = 'java'
-    make_noise_testset(lang)
+    dataset_name = 'new_dataset'
+    make_noise_testset(lang, dataset_name)
