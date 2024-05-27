@@ -12,13 +12,9 @@
                             "str, code line for lines labeled with replace, belong to sample block",
                             "str"
                         ],
-                        "code_after_idx": [
+                        "after": [
                             "int, index of code_after in code_window",
                             "int"
-                        ],
-                        "block_diff": [
-                            "str, diff of code_before and code_after",
-                            "str"
                         ]
                     },
                     "str, code line for lines labeled with keep, delete"
@@ -36,7 +32,7 @@
                     "str, code line"
                 ],
                 "file_path": "str, file path of this hunk",
-                "hunk_start_line_idx": "int, line number of this hunk"
+                "edit_start_line_idx": "int, line number of this hunk"
             }
         ],
         "sliding_windows": [
