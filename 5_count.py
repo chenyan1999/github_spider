@@ -46,7 +46,7 @@ def count(lang: str, dataset_name: str):
             "replace": 0
         }
         interline_num = {
-            "keep": 0,
+            "null": 0,
             "insert": 0,
             "block-split": 0
         }

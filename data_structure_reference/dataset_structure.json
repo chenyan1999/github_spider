@@ -57,7 +57,9 @@
                     "int, hunk id have overlap with sliding window"
                 ],
                 "file_path": "str, 文件路径含文件名",
-                "edit_start_line_idx": "int, 修改开始行号"
+                "edit_start_line_idx": "int, 修改开始行号",
+                "sliding_window_type": "str, type1, type2 or type3",
+                "previous_hunk_id": "int, 包含 hunk id 对应的修改后代码"
             },
             {
                 "...": "..."

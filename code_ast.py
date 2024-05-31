@@ -1,5 +1,8 @@
 import os
+import sys
+import Levenshtein
 from tree_sitter import Language, Parser
+
 
 class CustomTreeNode:
     def __init__(self, old_node, new_node):
@@ -22,6 +25,14 @@ class CustomTreeNode:
             return self.old_node.text.decode("utf-8")
         children_str = " ".join(str(child) for child in self.children)
         return children_str
+
+def str_similarity(before_window: list[str], after_window: list[str]) -> float:
+    str1 = "".join(before_window)
+    str2 = "".join(after_window)
+    distance = Levenshtein.distance(str1, str2)
+    max_len = max(len(str1), len(str2))
+    similarity = 1 - (distance / max_len)
+    return similarity
 
 def parse(code, language):
     assert language in ["go", "javascript", "typescript", "python", "java"]
@@ -122,10 +133,10 @@ def get_common_position(node, code1, code2):
     
     if node.children == []:
         # print(f"Text: {node.old_node.text.decode('utf8')}, before_start: {node.old_node.start_byte}, before_end: {node.old_node.end_byte}, after_start: {node.new_node.start_byte}, after_end: {node.new_node.end_byte}")
-        old_start_byte = node.old_node.start_byte if node.old_node.parent is None else node.old_node.parent.start_byte
-        old_end_byte = node.old_node.end_byte if node.old_node.parent is None else node.old_node.parent.end_byte
-        new_start_byte = node.new_node.start_byte if node.new_node.parent is None else node.new_node.parent.start_byte
-        new_end_byte = node.new_node.end_byte if node.new_node.parent is None else node.new_node.parent.end_byte
+        old_start_byte = node.old_node.start_byte #if node.old_node.parent is None else node.old_node.parent.start_byte
+        old_end_byte = node.old_node.end_byte #if node.old_node.parent is None else node.old_node.parent.end_byte
+        new_start_byte = node.new_node.start_byte #if node.new_node.parent is None else node.new_node.parent.start_byte
+        new_end_byte = node.new_node.end_byte #if node.new_node.parent is None else node.new_node.parent.end_byte
         old_line_numbers = get_line_number(code1, old_start_byte, old_end_byte)
         new_line_numbers = get_line_number(code2, new_start_byte, new_end_byte)
         if old_line_numbers == [] and new_line_numbers == []:
@@ -154,22 +165,37 @@ def merge_matched_position(common_positions):
     Return:
         merged_positions: list, the list of merged replace blocks
     """
-    merged_positions = [(common_positions[0]["old_lines"], common_positions[0]["new_lines"])]
-    for position in common_positions[1:]:
+    def is_consecutive(numbers):
+        if len(numbers) < 2:
+            return True  # 0或1个元素的列表被视为连贯的
+
+        for i in range(1, len(numbers)):
+            if numbers[i] != numbers[i - 1] + 1:
+                return False
+        return True
+    
+    positions = [(position["old_lines"], position["new_lines"]) for position in common_positions]
+    
+    merged_positions = [positions[0]]
+    for position in positions[1:]:
         to_merge_position_group_idx = []
         for mp_idx, mp in enumerate(merged_positions):
-            if len(set(position["old_lines"]).intersection(set(mp[0]))) != 0 or len(set(position["new_lines"]).intersection(set(mp[1]))) != 0:
+            if len(set(position[0]).intersection(set(mp[0]))) != 0 or len(set(position[1]).intersection(set(mp[1]))) != 0:
                 to_merge_position_group_idx.append(mp_idx)
         if to_merge_position_group_idx == []:
-            merged_positions.append((position["old_lines"], position["new_lines"]))
+            merged_positions.append((position[0], position[1]))
             continue
-        to_merge_position = [merged_positions[idx] for idx in to_merge_position_group_idx] + [(position["old_lines"], position["new_lines"])]
-        merged_positions = [mp for idx, mp in enumerate(merged_positions) if idx not in to_merge_position_group_idx]
+        to_merge_position = [merged_positions[idx] for idx in to_merge_position_group_idx] + [(position[0], position[1])]
         merged_old_position = list(set([line for lines in to_merge_position for line in lines[0]]))
         sorted_old_position = sorted(merged_old_position)
         merged_new_position = list(set([line for lines in to_merge_position for line in lines[1]]))
         sorted_new_position = sorted(merged_new_position)
-        merged_positions.append((sorted_old_position, sorted_new_position))
+        # if idx in sorted_old_position & sorted_new_position is continuous, then merge them
+        if is_consecutive(sorted_old_position) and is_consecutive(sorted_new_position):
+            merged_positions = [mp for idx, mp in enumerate(merged_positions) if idx not in to_merge_position_group_idx]
+            merged_positions.append((sorted_old_position, sorted_new_position))
+        else:
+            return None # if the merged positions are not continuous, we believe the quality of the matched positions is not good, so we return None
 
     return merged_positions
 
@@ -208,12 +234,23 @@ def finer_grain_window(before: list[str], after: list[str], lang: str) -> dict:
             }
         ]
     merged_positions = merge_matched_position(common_positions)
+    if merged_positions is None:
+        raise ValueError("The quality of the matched positions is not good")
     filtered_merged_positions = [merged_positions[0]]
     for match_pos_idx, match_pos in enumerate(merged_positions[1:]):
         match_pos_idx += 1
         if match_pos[0][0] > filtered_merged_positions[-1][0][-1] and \
         match_pos[1][0] > filtered_merged_positions[-1][1][-1]:
             filtered_merged_positions.append(match_pos)
+    
+    # make a second check to make sure the matched positions are indeed matched
+    to_be_filtered_positions = []
+    for match_pos in filtered_merged_positions:
+        score = str_similarity(before[match_pos[0][0]:match_pos[0][-1]+1], after[match_pos[1][0]:match_pos[1][-1]+1])
+        if score < 0.05:
+            to_be_filtered_positions.append(match_pos)
+    for match_pos in to_be_filtered_positions:
+        filtered_merged_positions.remove(match_pos)
     
     if len(filtered_merged_positions) == 0:
         return [
