@@ -55,7 +55,7 @@ def make_noise_testset(lang: str, dataset_name: str):
         "7": "Edit longer than 15 lines",
         "8": "Edit is trivial",
         "9": "File contain only edit",
-        "10": "File contain add edit at first line",
+        "10": "File contain insert edit at first line",
         "11": "Contain edit on less than 2 files",
         "12": "Edit/file contain <mask> or <MASK>"
     }

@@ -8,6 +8,30 @@ from tqdm import tqdm
 from code_ast import *
 ROOT_PATH = './'
 
+def contains_tag(main_string):
+    """
+    Check if any string in the list of substrings is found in the main string, case insensitive.
+
+    Parameters:
+    main_string (str): The main string to search within.
+
+    Returns:
+    bool: True if any substring is found in the main string, otherwise False.
+    """
+    assert type(main_string) is str
+    substrings = ["<inter-mask>", "<mask>",
+                  "<code_window>", "</code_window>", 
+                  "<prompt>", "</prompt>", 
+                  "<prior_edits>", "</prior_edits>",
+                  "<edit>", "</edit>",
+                  "<keep>", "<replace>", "<delete>",
+                  "<null>", "<insert>", "<block-split>",
+                  "<block-delete>", "</block-delete>",
+                  "<block-insert>", "</block-insert>",
+                  "<replace-by>", "</replace-by>"]
+    main_string_lower = main_string.lower()
+    return any(substring.lower() in main_string_lower for substring in substrings)
+
 # 超时处理函数，定制化错误信息
 def timeout_handler(signum, frame, commit_url):
     raise ValueError(f"14 {commit_url} Error: runtime exceeded 10 seconds")
@@ -185,8 +209,8 @@ def git_parse_diff(commit_url: str, lang: str, strict: bool=True):
         if not after_at_symbol_content.isascii():
             raise ValueError(f"5 {commit_url} Error: Edit/file contain non-ascii char")
         # Rule 12: do not contain <mask> or <MASK>
-        if '<mask>' in after_at_symbol_content or '<MASK>' in after_at_symbol_content:
-            raise ValueError(f"12 {commit_url} Error: Edit/file contain <mask> or <MASK>")
+        if contains_tag(after_at_symbol_content):
+            raise ValueError(f"12 {commit_url} Error: Edit/file contain edit tags")
         # form snapshot: each element:
         # type 1: list of line of code, unchanged
         # type 2: dict of edit, have key: "type", "before", "after"
@@ -197,8 +221,8 @@ def git_parse_diff(commit_url: str, lang: str, strict: bool=True):
 
         if len(snapshot) == len(edits):
             raise ValueError(f"9 {commit_url} Error: file contain only edit")
-        if type(snapshot[0]) == dict and snapshot[0]['type'] == 'add':
-            raise ValueError(f"10 {commit_url} Error: file contain add edit at first line")
+        if type(snapshot[0]) == dict and snapshot[0]['type'] == 'insert':
+            raise ValueError(f"10 {commit_url} Error: file contain insert edit at first line")
         all_edit_num += len(edits)
         # Rule 5: contain > 3 hunk and < 15 hunk
         if all_edit_num > 15 and strict: # early stop
@@ -213,7 +237,7 @@ def git_parse_diff(commit_url: str, lang: str, strict: bool=True):
             if edit['type'] == 'replace' and \
              "".join(edit['before']).strip('\n') == "".join(edit['after']).strip('\n'):
                 raise ValueError(f'8 {commit_url} Error: Edit is trivial: {edit["before"]} -> {edit["after"]}')
-            if edit['type'] == 'add' and "".join(edit['after']).strip() == '':
+            if edit['type'] == 'insert' and "".join(edit['after']).strip() == '':
                 raise ValueError(f'8 {commit_url} Error: Edit is trivial: {edit["before"]} -> {edit["after"]}')
         result_dict[file_name] = snapshot
     # Rule 5: contain > 3 hunk and < 15 hunk
@@ -262,9 +286,9 @@ def clean_edit(lang):
         "7": "Edit longer than 15 lines",
         "8": "Edit is trivial",
         "9": "File contain only edit",
-        "10": "File contain add edit at first line",
+        "10": "File contain insert edit at first line",
         "11": "Contain edit on less than 2 files",
-        "12": "Edit/file contain <mask> or <MASK>",
+        "12": "Edit/file contain edit tags",
         "13": "Fail to parse finer grain snapshot",
         "14": "Runtime exceeded 10 seconds"
     }

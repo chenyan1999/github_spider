@@ -133,59 +133,6 @@ def get_repos(lang, repo_num):
         raise Exception("No repos found")
     return repos
 
-def extract_patch(patch):
-    change_rec = []
-    '''
-    first split pharagraph that start with 
-    "@@ -start_line_idx,line_num +start_line_idx,line_num @@"
-    '''
-    for window in patch.split("@@ -"):
-        if len(window) == 0:
-            continue
-        window = "@@ -" + window
-        try:
-            old_window_start_line = int(re.findall(r"@@ \-(.+?)[,|\s]", window)[0]) # get the start line index of this window's old version
-            new_window_start_line = int(re.findall(r"\+(.+?)[,|\s]", window)[0]) # get the start line index of this window's new version
-        except:
-            raise Exception("Cannot find start line index")
-        lines = window.split("\n")
-        func_name = lines[0].split("@@")[-1].strip(' ')
-        change_item = {
-            'func_name':func_name,
-            'del_line_idx': [],
-            'add_line_idx': [],
-            'del_line': '',
-            'add_line': ''}
-        for i in range(1, len(lines)):
-            if not lines[i].startswith("-") and not lines[i].startswith("+"):
-                old_window_start_line += 1
-                new_window_start_line += 1
-                if not (len(change_item['del_line_idx']) == 0 and len(change_item['add_line_idx']) == 0): # if it is a non-empty change item
-                    # print(change_item)
-                    change_rec.append(change_item) # record this change
-                    change_item = { # reset change item
-                        'func_name':func_name,
-                        'del_line_idx': [],
-                        'add_line_idx': [],
-                        'del_line': '',
-                        'add_line': ''
-                    } 
-            else:
-                if lines[i].startswith("-"):
-                    change_item['del_line_idx'].append(old_window_start_line)
-                    change_item['del_line'] += ('' if change_item['del_line'] == '' else "\n") + lines[i][1:]
-                    old_window_start_line += 1
-                if lines[i].startswith("+"):
-                    change_item['add_line_idx'].append(new_window_start_line)
-                    change_item['add_line'] += ('' if change_item['add_line'] == '' else "\n") + lines[i][1:]
-                    new_window_start_line += 1
-    if len(change_item['del_line_idx']) == len(lines)-1 or len(change_item['add_line_idx']) == len(lines)-1:
-        return []  # when this patch deleted or added the entire file, we exclude this change
-    # if the change include the last line of the file
-    if not (len(change_item['del_line_idx']) == 0 and len(change_item['add_line_idx']) == 0): 
-        change_rec.append(change_item) # record this change
-    return change_rec
-
 def git_clone(user_name, proj_name):
     # Check if this repo has been downloaded
     global ROOT_PATH
