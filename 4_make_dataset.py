@@ -5,17 +5,31 @@ import json
 import random
 import itertools
 import numpy as np
+import transformers
 
 from tqdm import tqdm
+from llama import *
 
 ROOT_PATH = "./"
+transformers.utils.logging.set_verbosity_error()
 
-def clean_msg(msg: str):
-    # remove pull request id, e.g. (#1234)
-    pr_id_pattern = r'\(#(\d+)\)'
-    msg = re.sub(pr_id_pattern, '', msg)
+def filter_clean_msg_with_llama(msg: str, llama3, llama3_tokenizer):
+    # construct prompt
+    with open("prompt.txt", "r") as f:
+        prompt = f.read()
 
-    return msg
+    prompt = prompt.replace("<commit_message>", msg)
+    # ask llama3
+    b1 = b2 = None
+    for i in range(4):
+        answer = ask_llama3(prompt, llama3, llama3_tokenizer)
+        b1, b2, cleaned_msg = parse_answer(answer)
+        if b1 != None:
+            break
+    if b1 == False or b1 is None or b2 == False or b2 is None or len(cleaned_msg) == 0:
+        raise ValueError("Low quality commit message")
+    
+    return cleaned_msg
 
 def make_type3_sliding_window(windows, file_path):
     def merge_inter_labels(label1, label2):
@@ -353,6 +367,8 @@ def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save 
         commits_info = [json.loads(line) for line in f.readlines()]
     
     dataset = {}
+    rejcted_commit_cnt = 0
+    llama3, llama3_tokenizer = load_llama3()
     for commit_idx, (commit_url, snapshots) in enumerate(tqdm(snapshots_by_commit.items())):
         dataset[commit_url] = {}
         # find commit msg
@@ -360,7 +376,13 @@ def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save 
             if commit_url == commit_info["html_url"]:
                 commit_msg = commit_info["commit"]["message"]
                 break
-        dataset[commit_url]["commit_msg"] = clean_msg(commit_msg)
+        try:
+            dataset[commit_url]["commit_msg"] = filter_clean_msg_with_llama(commit_msg, llama3, llama3_tokenizer)
+            dataset[commit_url]["original_commit_msg"] = commit_msg
+        except:
+            dataset.pop(commit_url)
+            rejcted_commit_cnt += 1
+            continue
         
         # assign id to each hunk
         hunk_id = 0
@@ -663,7 +685,7 @@ def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save 
         type3_sliding_windows = random.sample(type3_sliding_windows, sample_number)
         dataset[commit_url]["sliding_windows"].extend(type3_sliding_windows)
 
-    
+    print(f"Rejected commit percentage: {rejcted_commit_cnt / len(snapshots_by_commit)}")
     if not os.path.exists(os.path.join(ROOT_PATH, dataset_name, lang)):
         os.makedirs(os.path.join(ROOT_PATH, dataset_name, lang)) 
     
