@@ -4,7 +4,7 @@ import re
 import os
 import json
 from tqdm import tqdm
-ROOT_PATH = './'
+ROOT_PATH = '/media/chenyan'
     
 def remove_pull_id(commit_message):
     # 定义匹配 pull request ID 的正则表达式

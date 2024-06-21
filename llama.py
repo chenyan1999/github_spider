@@ -10,9 +10,9 @@ def load_llama3():
     access_token = ''
     model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
 
-    tokenizer = AutoTokenizer.from_pretrained(model_id, token=access_token)
+    tokenizer = AutoTokenizer.from_pretrained("/media/chenyan/llama3", token=access_token)
     model = AutoModelForCausalLM.from_pretrained(
-        model_id,
+        "/media/chenyan/llama3",
         torch_dtype=torch.bfloat16,
         device_map="auto",
         token=access_token
@@ -26,9 +26,9 @@ def ask_llama3(question: str, model=None, tokenizer=None, answer_length=256):
         access_token = ''
         model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
 
-        tokenizer = AutoTokenizer.from_pretrained(model_id, token=access_token)
+        tokenizer = AutoTokenizer.from_pretrained("/media/chenyan/llama3", token=access_token)
         model = AutoModelForCausalLM.from_pretrained(
-            model_id,
+            "/media/chenyan/llama3",
             torch_dtype=torch.bfloat16,
             device_map="auto",
             token=access_token

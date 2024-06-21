@@ -17,13 +17,18 @@ class CodeWindow():
             self.edit_start_line_idx = info_dict["edit_start_line_idx"]
         else:
             self.code_window = info_dict["code_window"]
+            self.sliding_window_type = info_dict["sliding_window_type"]
             self.inline_labels = info_dict["inline_labels"]
             self.inter_labels = info_dict["inter_labels"]
             self.overlap_hunk_ids = info_dict["overlap_hunk_ids"]
             self.file_path = info_dict["file_path"]
+            self.to_insert = info_dict["to_insert"]
             self.edit_start_line_idx = info_dict["edit_start_line_idx"]
     
     def before_edit_window(self, split_by_line: bool = True):
+        """
+        What the entire window looks like before edit
+        """
         window = []
         if self.window_type == "hunk":
             window = []
@@ -41,9 +46,47 @@ class CodeWindow():
             return "".join(window)
         
     def after_edit_window(self, split_by_line: bool = True):
+        """
+        What the entire window looks like after edit
+        """
         if self.window_type == "sliding_window":
             raise ValueError("This is a sliding window, no after edit window")
-        window = self.after_edit
+        window = []
+        for line in self.code_window:
+            if type(line) is str:
+                window.append(line)
+            else:
+                window.extend(line["after"])
+        if split_by_line:
+            return window
+        else:
+            return "".join(window)
+    
+    def before_edit_region(self, split_by_line: bool = True):
+        """
+        What the to edit region looks like before edit
+        """
+        if self.window_type == "sliding_window":
+            raise ValueError("This is a sliding window, no after edit window")
+        window = []
+        for line in self.code_window:
+            if type(line) is not str:
+                window.extend(line["before"])
+        if split_by_line:
+            return window
+        else:
+            return "".join(window)
+        
+    def after_edit_region(self, split_by_line: bool = True):
+        """
+        What the to edit region looks like after edit
+        """
+        if self.window_type == "sliding_window":
+            raise ValueError("This is a sliding window, no after edit window")
+        window = []
+        for line in self.code_window:
+            if type(line) is not str:
+                window.extend(line["after"])
         if split_by_line:
             return window
         else:
@@ -320,3 +363,4 @@ class CodeWindow():
             return prior_edit
 
         return prior_edit
+    

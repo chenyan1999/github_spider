@@ -6,7 +6,7 @@ import signal
 import subprocess
 from tqdm import tqdm
 from code_ast import *
-ROOT_PATH = './'
+ROOT_PATH = '/media/chenyan'
 
 def contains_tag(main_string):
     """
@@ -136,10 +136,14 @@ def finer_grain_snapshot(snapshot: list, lang: str):
                 blocks = finer_grain_window(window["before"], window["after"], lang)
             except:
                 return None, None
+            # concat all blocks' after may not equal to window['after'], because we may delete some trivial insertion like '\n'
+            new_after = []
+            for block in blocks:
+                new_after += block['after']
             window = {
                 "type": "replace",
                 "before": window["before"],
-                "after": window["after"],
+                "after": new_after,
                 "blocks": blocks
             }
             finer_grain_snapshot.append(window)

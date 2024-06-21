@@ -10,7 +10,7 @@ import transformers
 from tqdm import tqdm
 from llama import *
 
-ROOT_PATH = "./"
+ROOT_PATH = "/media/chenyan"
 transformers.utils.logging.set_verbosity_error()
 
 def filter_clean_msg_with_llama(msg: str, llama3, llama3_tokenizer):
@@ -47,6 +47,7 @@ def make_type3_sliding_window(windows, file_path):
             "code_window": [],
             "inline_labels": [],
             "inter_labels": [],
+            "to_insert": [],
             "line_belong_to_hunk_id": []
         }
         for window in window_triplet:
@@ -56,11 +57,14 @@ def make_type3_sliding_window(windows, file_path):
             big_window["code_window"].extend(window["code_window"])
             big_window["inline_labels"].extend(window["inline_labels"])
             big_window["inter_labels"] = merge_inter_labels(big_window["inter_labels"], window["inter_labels"])
+            big_window["to_insert"].extend(window["to_insert"])
             big_window["line_belong_to_hunk_id"].extend(window["line_belong_to_hunk_id"])
+        assert len(big_window["to_insert"]) == big_window["inter_labels"].count("insert")
         return big_window
     
     def split_window(big_window, window_size, file_path, target_hunk_id):
         small_windows = []
+        insert_idx_base = 0
         for i in range(0, len(big_window["code_window"]), window_size):
             line_belong_to_hunk_id = big_window["line_belong_to_hunk_id"][i:i+window_size]
             overlap_hunk_ids = list(set(line_belong_to_hunk_id))
@@ -68,17 +72,21 @@ def make_type3_sliding_window(windows, file_path):
                 overlap_hunk_ids.remove(-1)
             if overlap_hunk_ids is None:
                 overlap_hunk_ids = []
+            insert_label_cnt = big_window["inter_labels"][i:i+window_size+1].count("insert")
             small_window = {
                 "code_window": big_window["code_window"][i:i+window_size],
                 "inline_labels": big_window["inline_labels"][i:i+window_size],
                 "inter_labels": big_window["inter_labels"][i:i+window_size+1],
                 "overlap_hunk_ids": overlap_hunk_ids,
                 "file_path": file_path,
+                "to_insert": big_window["to_insert"][insert_idx_base:insert_idx_base+insert_label_cnt],
                 "edit_start_line_idx": -1,
                 "sliding_window_type": "type3",
                 "previous_hunk_id": target_hunk_id
             }
+            insert_idx_base += insert_label_cnt
             if len(small_window["code_window"]) > 5:
+                assert len(small_window["to_insert"]) == small_window["inter_labels"].count("insert")
                 small_windows.append(small_window)
         return small_windows
         
@@ -102,6 +110,7 @@ def make_type3_sliding_window(windows, file_path):
                 "code_window": window,
                 "inline_labels": ["keep"] * len(window),
                 "inter_labels": ["null"] * (len(window) + 1),
+                "to_insert": [],
                 "line_belong_to_hunk_id": [-1] * len(window)
             }
             assert len(labelled_windows[idx]["code_window"]) == len(labelled_windows[idx]["inline_labels"])
@@ -114,12 +123,14 @@ def make_type3_sliding_window(windows, file_path):
                     "code_window": window["before"],
                     "inline_labels": [],
                     "inter_labels": ["insert"],
+                    "to_insert": [window["after"]],
                     "line_belong_to_hunk_id": [window["id"]] * len(window["before"])
                 }
                 labelled_windows[idx]["after"] = {
                     "code_window": window["after"],
                     "inline_labels": ["keep"] * len(window["after"]),
                     "inter_labels": ["null"] * (len(window["after"]) + 1),
+                    "to_insert": [],
                     "line_belong_to_hunk_id": [-1] * len(window["after"])
                 }
                 assert len(labelled_windows[idx]["before"]["code_window"]) == len(labelled_windows[idx]["before"]["inline_labels"])
@@ -134,12 +145,14 @@ def make_type3_sliding_window(windows, file_path):
                     "code_window": window["before"],
                     "inline_labels": ["delete"] * len(window["before"]),
                     "inter_labels": ["null"] * (len(window["before"]) + 1),
+                    "to_insert": [],
                     "line_belong_to_hunk_id": [window["id"]] * len(window["before"])
                 }
                 labelled_windows[idx]["after"] = {
                     "code_window": window["after"],
                     "inline_labels": [],
                     "inter_labels": ["null"],
+                    "to_insert": [],
                     "line_belong_to_hunk_id": [-1] * len(window["after"])
                 }
                 assert len(labelled_windows[idx]["before"]["code_window"]) == len(labelled_windows[idx]["before"]["inline_labels"])
@@ -154,12 +167,14 @@ def make_type3_sliding_window(windows, file_path):
                     "code_window": [],
                     "inline_labels": [],
                     "inter_labels": [],
+                    "to_insert": [],
                     "line_belong_to_hunk_id": [window["id"]] * len(window["before"])
                 }
                 labelled_windows[idx]["after"] = {
                     "code_window": [],
                     "inline_labels": [],
                     "inter_labels": [],
+                    "to_insert": [],
                     "line_belong_to_hunk_id": [-1] * len(window["after"])
                 }
                 # get the after version first
@@ -184,6 +199,7 @@ def make_type3_sliding_window(windows, file_path):
                     else:
                         if block["block_type"] == "insert":
                             to_insert = "insert"
+                            labelled_windows[idx]["before"]["to_insert"].append(block["after"])
                         elif block["block_type"] == "delete":
                             labelled_windows[idx]["before"]["code_window"].extend(block["before"])
                             labelled_windows[idx]["before"]["inline_labels"].extend(["delete"] * len(block["before"]))
@@ -199,7 +215,13 @@ def make_type3_sliding_window(windows, file_path):
                             to_insert = "null"
                 labelled_windows[idx]["before"]["inter_labels"].append(to_insert)
                 assert len(labelled_windows[idx]["before"]["code_window"]) == len(labelled_windows[idx]["before"]["inline_labels"])
-                assert len(labelled_windows[idx]["before"]["code_window"]) + 1 == len(labelled_windows[idx]["before"]["inter_labels"])
+                try:
+                    assert len(labelled_windows[idx]["before"]["code_window"]) + 1 == len(labelled_windows[idx]["before"]["inter_labels"])
+                except:
+                    print(f"code window:\n{window}")
+                    print(f"labelled windows {idx}, before version code window:\n{labelled_windows[idx]['before']['code_window']}")
+                    print(f"labelled windows {idx}, before version inline labels:\n{labelled_windows[idx]['before']['inter_labels']}")
+                    raise NotImplementedError
                 assert len(labelled_windows[idx]["before"]["code_window"]) == len(labelled_windows[idx]["before"]["line_belong_to_hunk_id"])
                 assert len(labelled_windows[idx]["after"]["code_window"]) == len(labelled_windows[idx]["after"]["inline_labels"])
                 assert len(labelled_windows[idx]["after"]["code_window"]) + 1 == len(labelled_windows[idx]["after"]["inter_labels"])
@@ -211,6 +233,7 @@ def make_type3_sliding_window(windows, file_path):
     target_window_after_edit_line_num = len(labelled_windows["0"]["after"]["code_window"])
     before_target_lines = int(np.ceil((10 - (target_window_after_edit_line_num % 10))/2))
     after_target_lines = int(np.floor((10 - (target_window_after_edit_line_num % 10))/2))
+    # In this case, we need to borrow code from both -2 window and -1 window
     if labelled_windows["-2"] is not None and labelled_windows["-1"] is not None and before_target_lines > len(labelled_windows["-1"]["code_window"]):
         prev_window = []
         # need to borrow lines from window[-2], combine -2 & -1, with 2 versions, before edit and after edit
@@ -224,21 +247,29 @@ def make_type3_sliding_window(windows, file_path):
             window_minus_2_code_window = labelled_windows["-2"]["before"]["code_window"]
             window_minus_2_inline_labels = labelled_windows["-2"]["before"]["inline_labels"]
             window_minus_2_inter_labels = labelled_windows["-2"]["before"]["inter_labels"]
+            window_minus_2_to_insert = labelled_windows["-2"]["before"]["to_insert"]
             prev_window_bef_version = {
                 "code_window": window_minus_3_code_window + window_minus_2_code_window + labelled_windows["-1"]["code_window"],
                 "inline_labels": window_minus_3_inline_labels + window_minus_2_inline_labels + labelled_windows["-1"]["inline_labels"],
                 "inter_labels": merge_inter_labels(merge_inter_labels(window_minus_3_inter_labels, window_minus_2_inter_labels), labelled_windows["-1"]["inter_labels"]),
+                "to_insert": window_minus_2_to_insert,
                 "line_belong_to_hunk_id": labelled_windows["-3"]["line_belong_to_hunk_id"][-lines_num_from_window_minus_3:] + labelled_windows["-2"]["before"]["line_belong_to_hunk_id"] + labelled_windows["-1"]["line_belong_to_hunk_id"]
             }
-        else:
+        else: # cannot borrow from -3 window, only borrow from -2 & -1
             lines_num_from_window_minus_2 = min(len(labelled_windows["-2"]["before"]["code_window"]), before_target_lines - len(labelled_windows["-1"]["code_window"]))
             window_minus_2_code_window = labelled_windows["-2"]["before"]["code_window"][-lines_num_from_window_minus_2:]
             window_minus_2_inline_labels = labelled_windows["-2"]["before"]["inline_labels"][-lines_num_from_window_minus_2:]
             window_minus_2_inter_labels = labelled_windows["-2"]["before"]["inter_labels"][-lines_num_from_window_minus_2-1:]
+            insert_label_cnt = window_minus_2_inter_labels.count("insert")
+            if insert_label_cnt != 0:
+                window_minus_2_to_insert = labelled_windows["-2"]["before"]["to_insert"][-1*insert_label_cnt:]
+            else:
+                window_minus_2_to_insert = []
             prev_window_bef_version = {
                 "code_window": window_minus_2_code_window + labelled_windows["-1"]["code_window"],
                 "inline_labels": window_minus_2_inline_labels + labelled_windows["-1"]["inline_labels"],
                 "inter_labels": merge_inter_labels(window_minus_2_inter_labels, labelled_windows["-1"]["inter_labels"]),
+                "to_insert": window_minus_2_to_insert,
                 "line_belong_to_hunk_id": labelled_windows["-2"]["before"]["line_belong_to_hunk_id"][-lines_num_from_window_minus_2:] + labelled_windows["-1"]["line_belong_to_hunk_id"]
             }
         assert len(prev_window_bef_version["code_window"]) == len(prev_window_bef_version["inline_labels"])
@@ -248,13 +279,13 @@ def make_type3_sliding_window(windows, file_path):
 
         # we remove after version, because this case will overlap with the case when
         # target hunk id = current target hunk id - 1
-    elif labelled_windows["-1"] is not None:
-        # only borrow lines from window[-1], 
+    elif labelled_windows["-1"] is not None: # only borrow from -1 window
         line_num = min(len(labelled_windows["-1"]["code_window"]), before_target_lines)
         cuted_prev_window = {
             "code_window": labelled_windows["-1"]["code_window"][-line_num:],
             "inline_labels": labelled_windows["-1"]["inline_labels"][-line_num:],
             "inter_labels": labelled_windows["-1"]["inter_labels"][-line_num-1:],
+            "to_insert": [],
             "line_belong_to_hunk_id": [-1] * line_num
         }
         assert len(cuted_prev_window["code_window"]) == len(cuted_prev_window["inline_labels"])
@@ -265,6 +296,7 @@ def make_type3_sliding_window(windows, file_path):
         # both are None, borrow no lines
         prev_window = []
 
+    # construct code window after target hunk
     if labelled_windows["+2"] is not None and labelled_windows["+1"] is not None and after_target_lines > len(labelled_windows["+1"]["code_window"]):
         # need to borrow lines from window[+2]
         next_window = []
@@ -278,21 +310,29 @@ def make_type3_sliding_window(windows, file_path):
             window_plus_2_code_window = labelled_windows["+2"]["before"]["code_window"]
             window_plus_2_inline_labels = labelled_windows["+2"]["before"]["inline_labels"]
             window_plus_2_inter_labels = labelled_windows["+2"]["before"]["inter_labels"]
+            window_plus_2_to_insert = labelled_windows["+2"]["before"]["to_insert"]
             next_window_bef_version = {
                 "code_window": labelled_windows["+1"]["code_window"] + window_plus_2_code_window + window_plus_3_code_window,
                 "inline_labels": labelled_windows["+1"]["inline_labels"] + window_plus_2_inline_labels + window_plus_3_inline_labels,
                 "inter_labels": merge_inter_labels(merge_inter_labels(labelled_windows["+1"]["inter_labels"], window_plus_2_inter_labels), window_plus_3_inter_labels),
+                "to_insert": window_plus_2_to_insert,
                 "line_belong_to_hunk_id" : labelled_windows["+1"]["line_belong_to_hunk_id"] + labelled_windows["+2"]["before"]["line_belong_to_hunk_id"] + labelled_windows["+3"]["line_belong_to_hunk_id"][:lines_num_from_window_plus_3]
             }
-        else:
+        else: # cannot borrow from +3, only from +1 & +2
             lines_num_from_window_plus_2 = min(len(labelled_windows["+2"]["before"]["code_window"]), after_target_lines - len(labelled_windows["+1"]["code_window"]))
             window_plus_2_code_window = labelled_windows["+2"]["before"]["code_window"][:lines_num_from_window_plus_2]
             window_plus_2_inline_labels = labelled_windows["+2"]["before"]["inline_labels"][:lines_num_from_window_plus_2]
             window_plus_2_inter_labels = labelled_windows["+2"]["before"]["inter_labels"][:lines_num_from_window_plus_2+1]
+            insert_label_cnt = window_plus_2_inter_labels.count("insert")
+            if insert_label_cnt != 0:
+                window_plus_2_to_insert = labelled_windows["+2"]["before"]["to_insert"][-1*insert_label_cnt:]
+            else:
+                window_plus_2_to_insert = []
             next_window_bef_version = {
                 "code_window": labelled_windows["+1"]["code_window"] + window_plus_2_code_window,
                 "inline_labels": labelled_windows["+1"]["inline_labels"] + window_plus_2_inline_labels,
                 "inter_labels": merge_inter_labels(labelled_windows["+1"]["inter_labels"], window_plus_2_inter_labels),
+                "to_insert": window_plus_2_to_insert,
                 "line_belong_to_hunk_id" : labelled_windows["+1"]["line_belong_to_hunk_id"] + labelled_windows["+2"]["before"]["line_belong_to_hunk_id"][:lines_num_from_window_plus_2]
             }
         assert len(next_window_bef_version["code_window"]) == len(next_window_bef_version["inline_labels"])
@@ -314,6 +354,7 @@ def make_type3_sliding_window(windows, file_path):
                 "code_window": labelled_windows["+1"]["code_window"] + window_plus_2_code_window + window_plus_3_code_window,
                 "inline_labels": labelled_windows["+1"]["inline_labels"] + window_plus_2_inline_labels + window_plus_3_inline_labels,
                 "inter_labels": merge_inter_labels(merge_inter_labels(labelled_windows["+1"]["inter_labels"], window_plus_2_inter_labels), window_plus_3_inter_labels),
+                "to_insert": [],
                 "line_belong_to_hunk_id" : labelled_windows["+1"]["line_belong_to_hunk_id"] + labelled_windows["+2"]["after"]["line_belong_to_hunk_id"] + labelled_windows["+3"]["line_belong_to_hunk_id"][:lines_num_from_window_plus_3]
             }
         else:
@@ -325,6 +366,7 @@ def make_type3_sliding_window(windows, file_path):
                 "code_window": labelled_windows["+1"]["code_window"] + window_plus_2_code_window,
                 "inline_labels": labelled_windows["+1"]["inline_labels"] + window_plus_2_inline_labels,
                 "inter_labels": merge_inter_labels(labelled_windows["+1"]["inter_labels"], window_plus_2_inter_labels),
+                "to_insert": [],
                 "line_belong_to_hunk_id" : labelled_windows["+1"]["line_belong_to_hunk_id"] + labelled_windows["+2"]["after"]["line_belong_to_hunk_id"][:lines_num_from_window_plus_2]
             }
         assert len(next_window_aft_version["code_window"]) == len(next_window_aft_version["inline_labels"])
@@ -338,6 +380,7 @@ def make_type3_sliding_window(windows, file_path):
             "code_window": labelled_windows["+1"]["code_window"][:line_num],
             "inline_labels": labelled_windows["+1"]["inline_labels"][:line_num],
             "inter_labels": labelled_windows["+1"]["inter_labels"][:line_num+1],
+            "to_insert": [],
             "line_belong_to_hunk_id": labelled_windows["+1"]["line_belong_to_hunk_id"][:line_num]
         }
         assert len(cuted_next_window["code_window"]) == len(cuted_next_window["inline_labels"])
@@ -494,10 +537,12 @@ def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save 
                 "inline_labels": [],
                 "inter_labels": [],
                 "overlap_hunk_ids": [],
+                "to_insert": [],
                 "file_path": file_path,
                 "edit_start_line_idx": line_count
             }
             insert_label = "null"
+            to_insert_content = None
             for window_idx, window in enumerate(snapshot):
                 if type(window) is list:
                     for code_line in window:
@@ -505,6 +550,8 @@ def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save 
                         if len(sliding_window["code_window"]) == sliding_window_len:
                             sliding_window["inter_labels"].append(insert_label)
                             if insert_label == "insert":
+                                assert to_insert_content is not None
+                                sliding_window["to_insert"].append(to_insert_content)
                                 # not update insert label because it's shared by 2 sliding windows inter labels
                                 shared_insert_hunk_id = sliding_window["overlap_hunk_ids"][-1]
                             assert len(sliding_window["code_window"]) == len(sliding_window["inline_labels"])
@@ -515,6 +562,7 @@ def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save 
                                 "inline_labels": [],
                                 "inter_labels": [],
                                 "overlap_hunk_ids": [],
+                                "to_insert": [],
                                 "file_path": file_path,
                                 "edit_start_line_idx": line_count
                             }
@@ -523,9 +571,12 @@ def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save 
                         # here inter label indicate whether to insert code before each line
                         sliding_window["inter_labels"].append(insert_label)
                         if insert_label == "insert":
+                            assert to_insert_content is not None
+                            sliding_window["to_insert"].append(to_insert_content)
                             if shared_insert_hunk_id not in sliding_window["overlap_hunk_ids"]:
                                 sliding_window["overlap_hunk_ids"].append(shared_insert_hunk_id)
                             insert_label = "null"
+                            to_insert_content = None
                         line_count += 1
                 elif type(window) is dict:
                     hunk_id = window["id"]
@@ -535,22 +586,28 @@ def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save 
                         if hunk_id not in sliding_window["overlap_hunk_ids"]:
                             sliding_window["overlap_hunk_ids"].append(hunk_id)
                         shared_insert_hunk_id = hunk_id
+                        assert to_insert_content is None
+                        to_insert_content = window["after"]
                     # case 2: it's a delete hunk
                     elif window["type"] == "delete":
                         for code_line in window["before"]:
                             if len(sliding_window["code_window"]) == sliding_window_len:
                                 sliding_window["inter_labels"].append(insert_label)
                                 if insert_label == "insert":
+                                    assert to_insert_content is not None
+                                    sliding_window["to_insert"].append(to_insert_content)
                                     # not update insert label because it's shared by 2 sliding windows inter labels
                                     shared_insert_hunk_id = sliding_window["overlap_hunk_ids"][-1]
                                 assert len(sliding_window["code_window"]) == len(sliding_window["inline_labels"])
                                 assert len(sliding_window["code_window"]) + 1 == len(sliding_window["inter_labels"])
+                                assert len(sliding_window["to_insert"]) == sliding_window["inter_labels"].count("insert")
                                 dataset[commit_url]["sliding_windows"].append(sliding_window)
                                 sliding_window = { # initialize a sliding window
                                     "code_window": [],
                                     "inline_labels": [],
                                     "inter_labels": [],
                                     "overlap_hunk_ids": [],
+                                    "to_insert": [],
                                     "file_path": file_path,
                                     "edit_start_line_idx": line_count
                                 }
@@ -560,9 +617,12 @@ def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save 
                             sliding_window["inline_labels"].append("delete")
                             sliding_window["inter_labels"].append(insert_label)
                             if insert_label == "insert":
+                                assert to_insert_content is not None
+                                sliding_window["to_insert"].append(to_insert_content)
                                 if shared_insert_hunk_id not in sliding_window["overlap_hunk_ids"]:
                                     sliding_window["overlap_hunk_ids"].append(shared_insert_hunk_id)
                                 insert_label = "null"
+                                to_insert_content = None
                             line_count += 1
                     # case 3: it's a replace hunk
                     elif window["type"] == "replace":
@@ -572,16 +632,20 @@ def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save 
                                     if len(sliding_window["code_window"]) == sliding_window_len:
                                         sliding_window["inter_labels"].append(insert_label)
                                         if insert_label == "insert":
+                                            assert to_insert_content is not None
+                                            sliding_window["to_insert"].append(to_insert_content)
                                             # not update insert label because it's shared by 2 sliding windows inter labels
                                             shared_insert_hunk_id = sliding_window["overlap_hunk_ids"][-1]
                                         assert len(sliding_window["code_window"]) == len(sliding_window["inline_labels"])
                                         assert len(sliding_window["code_window"]) + 1 == len(sliding_window["inter_labels"])
+                                        assert len(sliding_window["to_insert"]) == sliding_window["inter_labels"].count("insert")
                                         dataset[commit_url]["sliding_windows"].append(sliding_window)
                                         sliding_window = { # initialize a sliding window
                                             "code_window": [],
                                             "inline_labels": [],
                                             "inter_labels": [],
                                             "overlap_hunk_ids": [],
+                                            "to_insert": [],
                                             "file_path": file_path,
                                             "edit_start_line_idx": line_count
                                         }
@@ -591,30 +655,39 @@ def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save 
                                     sliding_window["inline_labels"].append("delete")
                                     sliding_window["inter_labels"].append(insert_label)
                                     if insert_label == "insert":
+                                        assert to_insert_content is not None
+                                        sliding_window["to_insert"].append(to_insert_content)
                                         if shared_insert_hunk_id not in sliding_window["overlap_hunk_ids"]:
                                             sliding_window["overlap_hunk_ids"].append(shared_insert_hunk_id)
                                         insert_label = "null"
+                                        to_insert_content = None
                                     line_count += 1
                             elif block["block_type"] == "insert":
                                 insert_label = "insert"
                                 if hunk_id not in sliding_window["overlap_hunk_ids"]:
                                     sliding_window["overlap_hunk_ids"].append(hunk_id)
                                 shared_insert_hunk_id = hunk_id
+                                assert to_insert_content is None
+                                to_insert_content = block["after"]
                             elif block["block_type"] == "modify":
                                 for code_line_idx, code_line in enumerate(block["before"]):
                                     if len(sliding_window["code_window"]) == sliding_window_len:
                                         sliding_window["inter_labels"].append(insert_label)
                                         if insert_label == "insert":
+                                            assert to_insert_content is not None
+                                            sliding_window["to_insert"].append(to_insert_content)
                                             # not update insert label because it's shared by 2 sliding windows inter labels
                                             shared_insert_hunk_id = sliding_window["overlap_hunk_ids"][-1]
                                         assert len(sliding_window["code_window"]) == len(sliding_window["inline_labels"])
                                         assert len(sliding_window["code_window"]) + 1 == len(sliding_window["inter_labels"])
+                                        assert len(sliding_window["to_insert"]) == sliding_window["inter_labels"].count("insert")
                                         dataset[commit_url]["sliding_windows"].append(sliding_window)
                                         sliding_window = { # initialize a sliding window
                                             "code_window": [],
                                             "inline_labels": [],
                                             "inter_labels": [],
                                             "overlap_hunk_ids": [],
+                                            "to_insert": [],
                                             "file_path": file_path,
                                             "edit_start_line_idx": line_count
                                         }
@@ -628,9 +701,12 @@ def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save 
                                     sliding_window["code_window"].append(code_line)
                                     sliding_window["inline_labels"].append("replace")
                                     if insert_label == "insert":
+                                        assert to_insert_content is not None
+                                        sliding_window["to_insert"].append(to_insert_content)
                                         if shared_insert_hunk_id not in sliding_window["overlap_hunk_ids"]:
                                             sliding_window["overlap_hunk_ids"].append(shared_insert_hunk_id)
                                         insert_label = "null"
+                                        to_insert_content = None
                                     line_count += 1
         
         # Sample type 2 sliding windows and reduce their number of 1/3 of type 1
@@ -712,4 +788,4 @@ def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save 
         return dataset
 
 if __name__ == "__main__":
-    make_dataset("python", "fine_grain_dataset")
+    make_dataset("python", "dataset_fine_grain")

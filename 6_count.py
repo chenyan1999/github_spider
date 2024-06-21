@@ -1,6 +1,6 @@
 import os
 import json
-ROOT_PATH = "./"
+ROOT_PATH = "/media/chenyan"
 
 def count(lang: str, dataset_name: str):
     global ROOT_PATH
@@ -64,6 +64,6 @@ def count(lang: str, dataset_name: str):
         print(f"#Interline Labels: {interline_num}")
 
 if __name__ == "__main__":
-    count("python", "fine_grain_dataset")
+    count("python", "dataset_fine_grain")
     
     

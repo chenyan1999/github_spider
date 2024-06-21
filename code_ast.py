@@ -114,10 +114,10 @@ def get_common_position(node, code1, code2):
                 - text: str, the text of the common position
                 - old_start_pos: int, the start position of the common position in the first code
                 - old_end_pos: int, the end position of the common position in the first code
-                - old_lines: list, the list of line indexes of the common position in the first code
+                - before_at_line: list, the list of line indexes of the common position in the first code
                 - new_start_pos: int, the start position of the common position in the second code
                 - new_end_pos: int, the end position of the common position in the second code
-                - new_lines: list, the list of line indexes of the common position in the second code
+                - after_at_line: list, the list of line indexes of the common position in the second code
     """
     def get_line_number(code, start_pos, end_pos):
         line_idxes = []
@@ -145,10 +145,10 @@ def get_common_position(node, code1, code2):
             "text": node.old_node.text.decode('utf8'),
             "old_start_pos": old_start_byte,
             "old_end_pos": old_end_byte,
-            "old_lines": old_line_numbers,
+            "before_at_line": old_line_numbers,
             "new_start_pos": new_start_byte,
             "new_end_pos": new_end_byte,
-            "new_lines": new_line_numbers,
+            "after_at_line": new_line_numbers,
         }]
     else:
         common_position = []
@@ -174,7 +174,7 @@ def merge_matched_position(common_positions):
                 return False
         return True
     
-    positions = [(position["old_lines"], position["new_lines"]) for position in common_positions]
+    positions = [(position["before_at_line"], position["after_at_line"]) for position in common_positions]
     
     merged_positions = [positions[0]]
     for position in positions[1:]:
@@ -200,42 +200,49 @@ def merge_matched_position(common_positions):
     return merged_positions
 
 def finer_grain_window(before: list[str], after: list[str], lang: str) -> dict:
+    def return_delete_insert_blocks(before,after):
+        blocks = [
+            {
+                "block_type": "delete",
+                "before": before,
+                "after": []
+            }
+        ]
+        if "".join(after).strip() != "":
+            blocks.append({
+                "block_type": "insert",
+                "before": [],
+                "after": after
+            })
+        return blocks
+    
     new_window = []
     before_str = "".join(before)
     after_str = "".join(after)
     before_tree = parse(before_str, lang)
     after_tree = parse(after_str, lang)
-    common_tree = max_common_subtree(before_tree.root_node, after_tree.root_node)
-    if common_tree is None:
-        return [
-            {
-                "block_type": "delete",
-                "before": before,
-                "after": []
-            },
-            {
-                "block_type": "insert",
-                "before": [],
-                "after": after
-            }
-        ]
-    common_positions = get_common_position(common_tree, before_str, after_str)
-    if common_positions == []:
-        return [
-            {
-                "block_type": "delete",
-                "before": before,
-                "after": []
-            },
-            {
-                "block_type": "insert",
-                "before": [],
-                "after": after
-            }
-        ]
-    merged_positions = merge_matched_position(common_positions)
+    
+    before_symbols = get_symbol_info(before_tree.root_node, before)
+    after_symbols = get_symbol_info(after_tree.root_node, after)
+    matched_symbols = lcs(before_symbols, after_symbols)
+    to_pop_idx = []
+    for m_idx, m in enumerate(matched_symbols):
+        if m["before_at_line"] >= len(before) or \
+           m["before_at_line"] < 0 or \
+           m["after_at_line"] >= len(after) or \
+           m["after_at_line"] < 0:
+            to_pop_idx.append(m_idx)
+    matched_symbols = [matched_symbols[m_idx] for m_idx in range(len(matched_symbols)) if m_idx not in to_pop_idx]
+    
+    if matched_symbols == []:
+        return return_delete_insert_blocks(before, after)
+    for ms in matched_symbols:
+        ms["before_at_line"] = [ms["before_at_line"]]
+        ms["after_at_line"] = [ms["after_at_line"]]
+        
+    merged_positions = merge_matched_position(matched_symbols)
     if merged_positions is None:
-        raise ValueError("The quality of the matched positions is not good")
+        return return_delete_insert_blocks(before, after)
     filtered_merged_positions = [merged_positions[0]]
     for match_pos_idx, match_pos in enumerate(merged_positions[1:]):
         match_pos_idx += 1
@@ -243,28 +250,9 @@ def finer_grain_window(before: list[str], after: list[str], lang: str) -> dict:
         match_pos[1][0] > filtered_merged_positions[-1][1][-1]:
             filtered_merged_positions.append(match_pos)
     
-    # make a second check to make sure the matched positions are indeed matched
-    to_be_filtered_positions = []
-    for match_pos in filtered_merged_positions:
-        score = str_similarity(before[match_pos[0][0]:match_pos[0][-1]+1], after[match_pos[1][0]:match_pos[1][-1]+1])
-        if score < 0.05:
-            to_be_filtered_positions.append(match_pos)
-    for match_pos in to_be_filtered_positions:
-        filtered_merged_positions.remove(match_pos)
-    
     if len(filtered_merged_positions) == 0:
-        return [
-            {
-                "block_type": "delete",
-                "before": before,
-                "after": []
-            },
-            {
-                "block_type": "insert",
-                "before": [],
-                "after": after
-            }
-        ]
+        return return_delete_insert_blocks(before, after)
+    skip_emtpy_insertion = 0
     for match_pos_idx, match_pos in enumerate(filtered_merged_positions):
         if match_pos_idx == 0:
             prev_old_end_line_idx = -1
@@ -279,11 +267,14 @@ def finer_grain_window(before: list[str], after: list[str], lang: str) -> dict:
                 "before": before[prev_old_end_line_idx+1:match_pos[0][0]],
                 "after": []
             })
-            new_window.append({
-                "block_type": "insert",
-                "before": [],
-                "after": after[prev_new_end_line_idx+1:match_pos[1][0]]
-            })
+            if "".join(after[prev_new_end_line_idx+1:match_pos[1][0]]).strip() != "":
+                new_window.append({
+                    "block_type": "insert",
+                    "before": [],
+                    "after": after[prev_new_end_line_idx+1:match_pos[1][0]]
+                })
+            else:
+                skip_emtpy_insertion += 1
         elif prev_old_end_line_idx + 1 < match_pos[0][0]:
             new_window.append({
                 "block_type": "delete",
@@ -291,11 +282,14 @@ def finer_grain_window(before: list[str], after: list[str], lang: str) -> dict:
                 "after": []
             })
         elif prev_new_end_line_idx + 1 < match_pos[1][0]:
-            new_window.append({
-                "block_type": "insert",
-                "before": [],
-                "after": after[prev_new_end_line_idx+1:match_pos[1][0]]
-            })
+            if "".join(after[prev_new_end_line_idx+1:match_pos[1][0]]).strip() != "":
+                new_window.append({
+                    "block_type": "insert",
+                    "before": [],
+                    "after": after[prev_new_end_line_idx+1:match_pos[1][0]]
+                })
+            else:
+                skip_emtpy_insertion += 1
         # take care of matched positions
         new_window.append({
             "block_type": "modify",
@@ -303,18 +297,21 @@ def finer_grain_window(before: list[str], after: list[str], lang: str) -> dict:
             "after": after[match_pos[1][0]:match_pos[1][-1]+1]
         })
         # take care of unmatched positions after last matched position
-        if match_pos_idx == len(filtered_merged_positions) - 1:
+        if match_pos_idx == len(filtered_merged_positions) - 1:   
             if match_pos[0][-1] != len(before) - 1 and match_pos[1][-1] != len(after) - 1:
                 new_window.append({
                     "block_type": "delete",
                     "before": before[match_pos[0][-1]+1:],
                     "after": []
                 })
-                new_window.append({
-                    "block_type": "insert",
-                    "before": [],
-                    "after": after[match_pos[1][-1]+1:]
-                })
+                if "".join(after[match_pos[1][-1]+1:]).strip() != "":
+                    new_window.append({
+                        "block_type": "insert",
+                        "before": [],
+                        "after": after[match_pos[1][-1]+1:]
+                    })
+                else:
+                    skip_emtpy_insertion += 1
             elif match_pos[0][-1] != len(before) - 1:
                 new_window.append({
                     "block_type": "delete",
@@ -322,24 +319,94 @@ def finer_grain_window(before: list[str], after: list[str], lang: str) -> dict:
                     "after": []
                 })
             elif match_pos[1][-1] != len(after) - 1:
-                new_window.append({
-                    "block_type": "insert",
-                    "before": [],
-                    "after": after[match_pos[1][-1]+1:]
-                })
+                if "".join(after[match_pos[1][-1]+1:]).strip() != "":
+                    new_window.append({
+                        "block_type": "insert",
+                        "before": [],
+                        "after": after[match_pos[1][-1]+1:]
+                    })
+                else:
+                    skip_emtpy_insertion += 1
 
     totoal_block_before = 0
     totoal_block_after = 0
     for block in new_window:
         totoal_block_before += len(block["before"])
         totoal_block_after += len(block["after"])
+        assert not (block["before"] == [] and block["after"] == [])
     try:
         assert totoal_block_before == len(before)
-        assert totoal_block_after == len(after)
+        assert totoal_block_after + skip_emtpy_insertion == len(after)
     except:
-        print(f"Before: {before}, After: {after}")
         raise AssertionError
     
     return new_window
+
+def get_symbol_info(node, code_window):
+    symbol_list = []
+    if len(node.children) == 0:
+        if node.type not in [",", ":", ".", ";", "(", ")", "[", "]", "{", "}"]:
+            return [
+                {
+                    "text": node.text.decode("utf-8"),
+                    "type": node.type,
+                    "at_line": node.start_point[0],
+                    "at_column": node.start_point[1]
+                }
+            ]
+        elif code_window[node.start_point[0]].strip() == node.type:
+            # when it is trivial, but takes the whole line, we should consider it
+            return [
+                {
+                    "text": node.text.decode("utf-8"),
+                    "type": node.type,
+                    "at_line": node.start_point[0],
+                    "at_column": node.start_point[1]
+                }
+            ]
+        else:
+            return []
+    else:
+        for child in node.children:
+            symbol_list.extend(get_symbol_info(child, code_window))
+    return symbol_list
+
+def lcs(list1, list2):
+    # 获取列表的长度
+    m, n = len(list1), len(list2)
     
+    # 创建一个 (m+1) x (n+1) 的二维数组，初始化为 0
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
     
+    # 动态规划计算 LCS
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if list1[i - 1]['text'] == list2[j - 1]['text'] and list1[i - 1]['type'] == list2[j - 1]['type']:
+                dp[i][j] = dp[i - 1][j - 1] + 1
+            else:
+                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+    
+    # 逆向回溯找到 LCS 并合并元素
+    merged_list = []
+    i, j = m, n
+    while i > 0 and j > 0:
+        if list1[i - 1]['text'] == list2[j - 1]['text'] and list1[i - 1]['type'] == list2[j - 1]['type']:
+            merged_element = {
+                'text': list1[i - 1]['text'],
+                'type': list1[i - 1]['type'],
+                'before_at_line': list1[i - 1].get('at_line'),
+                'before_at_column': list1[i - 1].get('at_column'),
+                'after_at_line': list2[j - 1].get('at_line'),
+                'after_at_column': list2[j - 1].get('at_column')
+            }
+            merged_list.append(merged_element)
+            i -= 1
+            j -= 1
+        elif dp[i - 1][j] > dp[i][j - 1]:
+            i -= 1
+        else:
+            j -= 1
+    
+    # 逆序输出 LCS
+    merged_list.reverse()
+    return merged_list

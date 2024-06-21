@@ -18,7 +18,7 @@ from user_agent_pool import user_agents
 GITHUB_TOKENS = ['']
 CURR_TOKEN_IDX = 0
 GITHUB_TOKENS_RST_TIME = [time.time()-3600 for _ in range(len(GITHUB_TOKENS))]
-ROOT_PATH = './'
+ROOT_PATH = '/media/chenyan'
 
 def get_response(request_url, params=None):
     global CURR_TOKEN_IDX
