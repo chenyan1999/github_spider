@@ -8,6 +8,15 @@ ROOT_PATH = "/media/chenyan"
 
 def filter_by_length(lang, dataset_path, tokenizer_name, max_length=512):
     tokenizer = RobertaTokenizer.from_pretrained(tokenizer_name)
+    new_special_tokens = ["<inter-mask>",
+                          "<code_window>", "</code_window>", 
+                          "<prompt>", "</prompt>", 
+                          "<prior_edits>", "</prior_edits>",
+                          "<edit>", "</edit>",
+                          "<keep>", "<replace>", "<delete>",
+                          "<null>", "<insert>", "<block-split>",
+                          "</insert>","<replace-by>", "</replace-by>"]
+    tokenizer.add_tokens(new_special_tokens, special_tokens=True)
     for name in ["train", "dev", "test"]:
         with open(f"{ROOT_PATH}/{dataset_path}/{lang}/{name}.json", "r") as f:
             dataset = json.load(f)
@@ -36,4 +45,7 @@ def filter_by_length(lang, dataset_path, tokenizer_name, max_length=512):
             json.dump(dataset, f, indent=4)
             
 if __name__ == '__main__':
-    filter_by_length("python", "dataset_fine_grain", "salesforce/codet5-base")
+    lang = "go"
+    filter_by_length(lang, "dataset_fine_grain", "salesforce/codet5-base")
+    filter_by_length(lang, "dataset_fine_grain", "microsoft/codebert-base")
+    

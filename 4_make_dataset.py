@@ -84,6 +84,9 @@ def make_type3_sliding_window(windows, file_path):
                 "sliding_window_type": "type3",
                 "previous_hunk_id": target_hunk_id
             }
+            for idx in [0, -1]: # avoid block-split appearing anywhere beyond the middle of 2 replace
+                if small_window["inter_labels"][idx] == "block-split":
+                    small_window["inter_labels"][idx] = "null"
             insert_idx_base += insert_label_cnt
             if len(small_window["code_window"]) > 5:
                 assert len(small_window["to_insert"]) == small_window["inter_labels"].count("insert")
