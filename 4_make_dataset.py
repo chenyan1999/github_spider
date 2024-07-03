@@ -67,19 +67,28 @@ def make_type3_sliding_window(windows, file_path):
         insert_idx_base = 0
         for i in range(0, len(big_window["code_window"]), window_size):
             line_belong_to_hunk_id = big_window["line_belong_to_hunk_id"][i:i+window_size]
+            
+            insert_label_cnt = big_window["inter_labels"][i:i+window_size+1].count("insert")
+            to_inserts = big_window["to_insert"][insert_idx_base:insert_idx_base+insert_label_cnt]
+            for j, to_insert in enumerate(to_inserts):
+                if type(to_insert) is tuple:
+                    line_belong_to_hunk_id.append(to_insert[1])
+                    to_inserts[j] = to_insert[0]
+                    
             overlap_hunk_ids = list(set(line_belong_to_hunk_id))
             if -1 in overlap_hunk_ids:
                 overlap_hunk_ids.remove(-1)
             if overlap_hunk_ids is None:
                 overlap_hunk_ids = []
-            insert_label_cnt = big_window["inter_labels"][i:i+window_size+1].count("insert")
+            
+            
             small_window = {
                 "code_window": big_window["code_window"][i:i+window_size],
                 "inline_labels": big_window["inline_labels"][i:i+window_size],
                 "inter_labels": big_window["inter_labels"][i:i+window_size+1],
                 "overlap_hunk_ids": overlap_hunk_ids,
                 "file_path": file_path,
-                "to_insert": big_window["to_insert"][insert_idx_base:insert_idx_base+insert_label_cnt],
+                "to_insert": to_inserts,
                 "edit_start_line_idx": -1,
                 "sliding_window_type": "type3",
                 "previous_hunk_id": target_hunk_id
@@ -126,7 +135,7 @@ def make_type3_sliding_window(windows, file_path):
                     "code_window": window["before"],
                     "inline_labels": [],
                     "inter_labels": ["insert"],
-                    "to_insert": [window["after"]],
+                    "to_insert": [(window["after"], window["id"])],
                     "line_belong_to_hunk_id": [window["id"]] * len(window["before"])
                 }
                 labelled_windows[idx]["after"] = {
@@ -404,7 +413,7 @@ def make_type3_sliding_window(windows, file_path):
         type_3_windows.extend(small_windows)
     return type_3_windows
 
-def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save = True):
+def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save = True, clean_commit_msg = True):
     if snapshots_by_commit is None:
         with open(os.path.join(ROOT_PATH, "qualified_commit", f"{lang}_qualified_commit_snapshots.json"), "r") as f:
             snapshots_by_commit = json.load(f)
@@ -414,7 +423,8 @@ def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save 
     
     dataset = {}
     rejcted_commit_cnt = 0
-    llama3, llama3_tokenizer = load_llama3()
+    if clean_commit_msg:
+        llama3, llama3_tokenizer = load_llama3()
     for commit_idx, (commit_url, snapshots) in enumerate(tqdm(snapshots_by_commit.items())):
         dataset[commit_url] = {}
         # find commit msg
@@ -422,13 +432,16 @@ def make_dataset(lang, dataset_name: str, snapshots_by_commit = None, auto_save 
             if commit_url == commit_info["html_url"]:
                 commit_msg = commit_info["commit"]["message"]
                 break
-        try:
-            dataset[commit_url]["commit_msg"] = filter_clean_msg_with_llama(commit_msg, llama3, llama3_tokenizer)
-            dataset[commit_url]["original_commit_msg"] = commit_msg
-        except:
-            dataset.pop(commit_url)
-            rejcted_commit_cnt += 1
-            continue
+        if clean_commit_msg:
+            try:
+                dataset[commit_url]["commit_msg"] = filter_clean_msg_with_llama(commit_msg, llama3, llama3_tokenizer)
+                dataset[commit_url]["original_commit_msg"] = commit_msg
+            except:
+                dataset.pop(commit_url)
+                rejcted_commit_cnt += 1
+                continue
+        else:
+            dataset[commit_url]["commit_msg"] = commit_msg
         
         # assign id to each hunk
         hunk_id = 0

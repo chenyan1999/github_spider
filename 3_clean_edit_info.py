@@ -239,7 +239,7 @@ def git_parse_diff(commit_url: str, lang: str, strict: bool=True):
                 raise ValueError(f'7 {commit_url} Error: Edit longer than 15 lines, before: {len(edit["before"])} lines, after: {len(edit["after"])} lines')
             # Rule 4: edit can not be trivial
             if edit['type'] == 'replace' and \
-             "".join(edit['before']).strip('\n') == "".join(edit['after']).strip('\n'):
+             "".join(edit['before']).strip() == "".join(edit['after']).strip():
                 raise ValueError(f'8 {commit_url} Error: Edit is trivial: {edit["before"]} -> {edit["after"]}')
             if edit['type'] == 'insert' and "".join(edit['after']).strip() == '':
                 raise ValueError(f'8 {commit_url} Error: Edit is trivial: {edit["before"]} -> {edit["after"]}')

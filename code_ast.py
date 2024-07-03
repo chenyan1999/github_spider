@@ -74,12 +74,11 @@ def finer_grain_window(before: list[str], after: list[str], lang: str) -> dict:
                 "after": []
             }
         ]
-        if "".join(after).strip() != "":
-            blocks.append({
-                "block_type": "insert",
-                "before": [],
-                "after": after
-            })
+        blocks.append({
+            "block_type": "insert",
+            "before": [],
+            "after": after
+        })
         return blocks
     
     new_window = []
@@ -118,7 +117,6 @@ def finer_grain_window(before: list[str], after: list[str], lang: str) -> dict:
     
     if len(filtered_merged_positions) == 0:
         return return_delete_insert_blocks(before, after)
-    skip_emtpy_insertion = 0
     for match_pos_idx, match_pos in enumerate(filtered_merged_positions):
         if match_pos_idx == 0:
             prev_old_end_line_idx = -1
@@ -133,14 +131,11 @@ def finer_grain_window(before: list[str], after: list[str], lang: str) -> dict:
                 "before": before[prev_old_end_line_idx+1:match_pos[0][0]],
                 "after": []
             })
-            if "".join(after[prev_new_end_line_idx+1:match_pos[1][0]]).strip() != "":
-                new_window.append({
-                    "block_type": "insert",
-                    "before": [],
-                    "after": after[prev_new_end_line_idx+1:match_pos[1][0]]
-                })
-            else:
-                skip_emtpy_insertion += 1
+            new_window.append({
+                "block_type": "insert",
+                "before": [],
+                "after": after[prev_new_end_line_idx+1:match_pos[1][0]]
+            })
         elif prev_old_end_line_idx + 1 < match_pos[0][0]:
             new_window.append({
                 "block_type": "delete",
@@ -148,14 +143,11 @@ def finer_grain_window(before: list[str], after: list[str], lang: str) -> dict:
                 "after": []
             })
         elif prev_new_end_line_idx + 1 < match_pos[1][0]:
-            if "".join(after[prev_new_end_line_idx+1:match_pos[1][0]]).strip() != "":
-                new_window.append({
-                    "block_type": "insert",
-                    "before": [],
-                    "after": after[prev_new_end_line_idx+1:match_pos[1][0]]
-                })
-            else:
-                skip_emtpy_insertion += 1
+            new_window.append({
+                "block_type": "insert",
+                "before": [],
+                "after": after[prev_new_end_line_idx+1:match_pos[1][0]]
+            })
         # take care of matched positions
         new_window.append({
             "block_type": "modify",
@@ -170,14 +162,11 @@ def finer_grain_window(before: list[str], after: list[str], lang: str) -> dict:
                     "before": before[match_pos[0][-1]+1:],
                     "after": []
                 })
-                if "".join(after[match_pos[1][-1]+1:]).strip() != "":
-                    new_window.append({
-                        "block_type": "insert",
-                        "before": [],
-                        "after": after[match_pos[1][-1]+1:]
-                    })
-                else:
-                    skip_emtpy_insertion += 1
+                new_window.append({
+                    "block_type": "insert",
+                    "before": [],
+                    "after": after[match_pos[1][-1]+1:]
+                })
             elif match_pos[0][-1] != len(before) - 1:
                 new_window.append({
                     "block_type": "delete",
@@ -185,24 +174,20 @@ def finer_grain_window(before: list[str], after: list[str], lang: str) -> dict:
                     "after": []
                 })
             elif match_pos[1][-1] != len(after) - 1:
-                if "".join(after[match_pos[1][-1]+1:]).strip() != "":
-                    new_window.append({
-                        "block_type": "insert",
-                        "before": [],
-                        "after": after[match_pos[1][-1]+1:]
-                    })
-                else:
-                    skip_emtpy_insertion += 1
+                new_window.append({
+                    "block_type": "insert",
+                    "before": [],
+                    "after": after[match_pos[1][-1]+1:]
+                })
 
     totoal_block_before = 0
     totoal_block_after = 0
     for block in new_window:
         totoal_block_before += len(block["before"])
         totoal_block_after += len(block["after"])
-        assert not (block["before"] == [] and block["after"] == [])
     try:
         assert totoal_block_before == len(before)
-        assert totoal_block_after + skip_emtpy_insertion == len(after)
+        assert totoal_block_after == len(after)
     except:
         raise AssertionError
     
