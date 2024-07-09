@@ -18,12 +18,12 @@ if __name__ == '__main__':
     
     # Step 4: make a dataset
     step_4 = import_module("4_make_dataset")
-    step_4.make_dataset(lang, "dataset_fine_grain", clean_commit_msg=False)
+    step_4.make_dataset(lang, "dataset_fine_grain_mol", clean_commit_msg=False)
     
     # Step 5: filter a commit if contains any code window / sliding window that is longer than input length
     step_5 = import_module("5_filter_by_length")
-    step_5.filter_by_length(lang, "dataset_fine_grain", tokenizer_name="salesforce/codet5-base")
+    step_5.filter_by_length(lang, "dataset_fine_grain_mol", tokenizer_name="salesforce/codet5-base")
     
     # Step 6: count dataset
     step_6 = import_module("6_count")
-    step_6.count(lang, "dataset_fine_grain")
+    step_6.count(lang, "dataset_fine_grain_mol")

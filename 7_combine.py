@@ -18,7 +18,7 @@ def combine(lang_list, dataset_path):
 
 if __name__ == '__main__':
     lang_list = ["python", "go", "java", "javascript", "typescript"]
-    dataset_path = "/media/chenyan/dataset_fine_grain"
+    dataset_path = "/media/chenyan/dataset_fine_grain_mol"
     if not os.path.exists(f"{dataset_path}/all"):
         os.mkdir(f"{dataset_path}/all")
     combine(lang_list, dataset_path)
