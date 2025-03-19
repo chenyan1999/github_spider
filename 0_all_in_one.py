@@ -5,8 +5,8 @@ if __name__ == '__main__':
     num_of_repo = 100 
 
     # Step 1: get repos, commits and clone to local
-    # step_1 = import_module("1_crawl")
-    # step_1.crawl(lang, num_of_repo)
+    step_1 = import_module("1_crawl")
+    step_1.crawl(lang, num_of_repo)
     
     # Step 2: filter commit based on commit information
     step_2 = import_module("2_clean_commit_info")

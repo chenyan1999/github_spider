@@ -137,30 +137,35 @@ def git_clone(user_name, proj_name):
     # Check if this repo has been downloaded
     global ROOT_PATH
     global GITHUB_TOKENS, CURR_TOKEN_IDX
-    curr_dir = os.getcwd()
+    
     if not os.path.exists(ROOT_PATH+'/repos'):
         os.mkdir(ROOT_PATH+'/repos')
     if os.path.exists(ROOT_PATH+f'/repos/{proj_name}/'):
+        result = subprocess.run(
+            "git remote show origin | grep 'HEAD branch'",
+            shell=True,
+            text=True,
+            capture_output=True,
+            check=True,
+            cwd=os.path.normpath(ROOT_PATH+'/repos/'+proj_name)
+        )
+        branch_name = result.stdout.split(":")[1].strip()
         try:
-            os.chdir(os.path.normpath(ROOT_PATH+'/repos/'+proj_name))
-            git_pull_command = ["git", "pull"]
+            fetch_command = ["git", "fetch", "origin"]
+            subprocess.run(fetch_command, check=True, cwd=os.path.normpath(ROOT_PATH+'/repos/'+proj_name))
             # Run the Git pull command
-            subprocess.run(git_pull_command, check=True)
+            reset_command = ["git", "reset", "--hard", f"origin/{branch_name}"]
+            subprocess.run(reset_command, check=True, cwd=os.path.normpath(ROOT_PATH+'/repos/'+proj_name))
         except:
-            os.chdir(curr_dir)
             raise Exception(f"==> Pulling {user_name}/{proj_name} failed")
     else: # if not, download the whole repo of the latest version
         clone_url = f"https://{GITHUB_TOKENS[CURR_TOKEN_IDX]}@github.com/{user_name}/{proj_name}.git"
         try:
-            os.chdir(os.path.normpath(ROOT_PATH+'/repos'))
             git_clone_command = ["git", "clone", clone_url]
             # Run the Git clone command
-            subprocess.run(git_clone_command, check=True)
+            subprocess.run(git_clone_command, check=True, cwd=os.path.normpath(ROOT_PATH+'/repos'))
         except:
-            os.chdir(curr_dir)
             raise Exception(f"==> Downloading {user_name}/{proj_name} from {clone_url} failed")
-    
-    os.chdir(curr_dir)
     
 def crawl(lang, repo_num):
     global ROOT_PATH

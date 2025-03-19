@@ -61,9 +61,10 @@ def count(lang: str, dataset_name: str):
                     interline_num[label] += 1
         print(f"#Sliding Windows: {sld_win_num}")
         print(f"#Inline Labels: {inline_num}")
-        print(f"#Interline Labels: {interline_num}")
+        print(f"#Interline Labels: {interline_num}\n")
 
 if __name__ == "__main__":
-    count("python", "dataset_fine_grain")
+    for lang in ["python", "go", "java", "javascript", "typescript", "all"]:
+        count(lang, "dataset_fine_grain")
     
     
