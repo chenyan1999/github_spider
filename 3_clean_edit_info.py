@@ -243,6 +243,8 @@ def git_parse_diff(commit_url: str, lang: str, strict: bool=True):
                 raise ValueError(f'8 {commit_url} Error: Edit is trivial: {edit["before"]} -> {edit["after"]}')
             if edit['type'] == 'insert' and "".join(edit['after']).strip() == '':
                 raise ValueError(f'8 {commit_url} Error: Edit is trivial: {edit["before"]} -> {edit["after"]}')
+            if edit['type'] == 'delete' and "".join(edit['before']).strip() == '':
+                raise ValueError(f'8 {commit_url} Error: Edit is trivial: {edit["before"]} -> {edit["after"]}')
         result_dict[file_name] = snapshot
     # Rule 5: contain > 3 hunk and < 15 hunk
     if all_edit_num < 3:
