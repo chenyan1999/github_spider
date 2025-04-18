@@ -12,13 +12,15 @@ import jsonlines
 import subprocess
 from tqdm import tqdm
 
+from dotenv import load_dotenv
 from proxies_pool import proxy_list
 from user_agent_pool import user_agents    
 
-GITHUB_TOKENS = ['']
+load_dotenv()
+GITHUB_TOKENS = os.getenv("GITHUB_TOKENS").split(',')
 CURR_TOKEN_IDX = 0
 GITHUB_TOKENS_RST_TIME = [time.time()-3600 for _ in range(len(GITHUB_TOKENS))]
-ROOT_PATH = '/media/chenyan'
+ROOT_PATH = './'
 
 def get_response(request_url, params=None):
     global CURR_TOKEN_IDX

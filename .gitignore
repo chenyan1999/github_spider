@@ -14,3 +14,4 @@ nohup*
 tmp/
 *ipynb
 fine_grain_dataset/
+*.env
